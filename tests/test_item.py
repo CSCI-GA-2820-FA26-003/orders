@@ -196,6 +196,22 @@ class TestItem(TestCase):
         self.assertEqual(item.unit_price, Decimal("12.34"))
         self.assertIsNone(item.order_id)
 
+    def test_deserialize_bad_order_id(self):
+        """It should not Deserialize an Item with a bad order_id"""
+        item = Item()
+        for order_id in ["abc", True, 1.5]:
+            data = {"product_id": 1, "quantity": 1, "unit_price": 1.00, "order_id": order_id}
+            self.assertRaises(DataValidationError, item.deserialize, data)
+
+    def test_deserialize_bad_data_leaves_item_unchanged(self):
+        """It should not change an Item when the data is invalid"""
+        item = ItemFactory(product_id=1, quantity=2, unit_price=Decimal("3.00"))
+        bad_data = {"product_id": 5, "quantity": 0, "unit_price": "4.00"}
+        self.assertRaises(DataValidationError, item.deserialize, bad_data)
+        self.assertEqual(item.product_id, 1)
+        self.assertEqual(item.quantity, 2)
+        self.assertEqual(item.unit_price, Decimal("3.00"))
+
     def test_deserialize_missing_field(self):
         """It should not Deserialize an Item with a missing field"""
         item = Item()

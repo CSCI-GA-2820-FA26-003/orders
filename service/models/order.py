@@ -75,20 +75,22 @@ class Order(db.Model, PersistentBase):
         """
         Populates an Order from a dictionary
 
+        All of the data is validated first so that the Order is left
+        unchanged if anything is invalid. When "items" is given it replaces
+        the current items, otherwise the current items are kept.
+
         Args:
             data (dict): A dictionary containing the resource data
         """
         try:
-            self.customer_id = _to_int(data["customer_id"], "customer_id")
-            self.status = OrderStatus[data.get("status", OrderStatus.NEW.name)]
+            customer_id = _to_int(data["customer_id"], "customer_id")
+            status = OrderStatus[data.get("status", OrderStatus.NEW.name)]
             # handle inner list of items
-            json_items = data.get("items", [])
-            if not isinstance(json_items, list):
-                raise DataValidationError("Invalid Order: items must be a list")
-            for json_item in json_items:
-                item = Item()
-                item.deserialize(json_item)
-                self.items.append(item)
+            new_items = None
+            if "items" in data:
+                if not isinstance(data["items"], list):
+                    raise DataValidationError("Invalid Order: items must be a list")
+                new_items = [Item().deserialize(json_item) for json_item in data["items"]]
         except KeyError as error:
             raise DataValidationError(
                 "Invalid Order: missing or bad value " + str(error.args[0])
@@ -98,6 +100,12 @@ class Order(db.Model, PersistentBase):
                 "Invalid Order: body of request contained bad or no data "
                 + str(error)
             ) from error
+
+        # everything is valid so it is safe to change the Order now
+        self.customer_id = customer_id
+        self.status = status
+        if new_items is not None:
+            self.items = new_items
         return self
 
     ##################################################

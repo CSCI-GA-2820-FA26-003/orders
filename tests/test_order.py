@@ -259,6 +259,52 @@ class TestOrder(TestCase):
         self.assertEqual(new_order.items[0].quantity, order.items[0].quantity)
         self.assertEqual(new_order.items[0].unit_price, order.items[0].unit_price)
 
+    def test_deserialize_replaces_items(self):
+        """It should replace the Items of an existing Order when items are given"""
+        order = OrderFactory()
+        ItemFactory(order=order)
+        ItemFactory(order=order)
+        order.create()
+
+        order = Order.find(order.id)
+        data = {"customer_id": order.customer_id, "items": [{"product_id": 9, "quantity": 1, "unit_price": "2.00"}]}
+        # deserializing twice must not create duplicate items
+        order.deserialize(data)
+        order.deserialize(data)
+        order.update()
+
+        order = Order.find(order.id)
+        self.assertEqual(len(order.items), 1)
+        self.assertEqual(order.items[0].product_id, 9)
+        self.assertEqual(len(Item.all()), 1)
+
+    def test_deserialize_keeps_items(self):
+        """It should keep the Items of an existing Order when items are not given"""
+        order = OrderFactory(status=OrderStatus.NEW)
+        ItemFactory(order=order)
+        order.create()
+
+        order = Order.find(order.id)
+        order.deserialize({"customer_id": order.customer_id, "status": "SHIPPED"})
+        order.update()
+
+        order = Order.find(order.id)
+        self.assertEqual(order.status, OrderStatus.SHIPPED)
+        self.assertEqual(len(order.items), 1)
+
+    def test_deserialize_bad_data_leaves_order_unchanged(self):
+        """It should not change an Order when the data is invalid"""
+        order = OrderFactory(customer_id=1, status=OrderStatus.NEW)
+        ItemFactory(order=order)
+        order.create()
+
+        order = Order.find(order.id)
+        bad_data = {"customer_id": 2, "status": "SHIPPED", "items": [{"product_id": 9, "quantity": 0, "unit_price": "2.00"}]}
+        self.assertRaises(DataValidationError, order.deserialize, bad_data)
+        self.assertEqual(order.customer_id, 1)
+        self.assertEqual(order.status, OrderStatus.NEW)
+        self.assertEqual(len(order.items), 1)
+
     def test_deserialize_default_status(self):
         """It should Deserialize an Order with no status as NEW"""
         order = Order().deserialize({"customer_id": 7})

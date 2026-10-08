@@ -64,20 +64,24 @@ class Item(db.Model, PersistentBase):
         """
         Populates an Item from a dictionary
 
+        All of the data is validated first so that the Item is left
+        unchanged if anything is invalid
+
         Args:
             data (dict): A dictionary containing the resource data
         """
         try:
-            self.product_id = _to_int(data["product_id"], "product_id")
-            self.quantity = _to_int(data["quantity"], "quantity")
-            if not MIN_QUANTITY <= self.quantity <= MAX_QUANTITY:
+            product_id = _to_int(data["product_id"], "product_id")
+            quantity = _to_int(data["quantity"], "quantity")
+            if not MIN_QUANTITY <= quantity <= MAX_QUANTITY:
                 raise DataValidationError(
                     f"Invalid Item: quantity must be between {MIN_QUANTITY} and {MAX_QUANTITY}"
                 )
-            self.unit_price = _to_price(data["unit_price"])
+            unit_price = _to_price(data["unit_price"])
             # only change the parent Order when one is given
-            if "order_id" in data:
-                self.order_id = data["order_id"]
+            order_id = self.order_id
+            if "order_id" in data and data["order_id"] is not None:
+                order_id = _to_int(data["order_id"], "order_id")
         except KeyError as error:
             raise DataValidationError(
                 "Invalid Item: missing " + error.args[0]
@@ -87,6 +91,12 @@ class Item(db.Model, PersistentBase):
                 "Invalid Item: body of request contained bad or no data "
                 + str(error)
             ) from error
+
+        # everything is valid so it is safe to change the Item now
+        self.product_id = product_id
+        self.quantity = quantity
+        self.unit_price = unit_price
+        self.order_id = order_id
         return self
 
 
