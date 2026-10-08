@@ -15,15 +15,15 @@
 ######################################################################
 
 """
-YourResourceModel Service
+Order Service
 
 This service implements a REST API that allows you to Create, Read, Update
-and Delete YourResourceModel
+and Delete Orders
 """
 
 from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
-from service.models import YourResourceModel
+from service.models import Order, Item  # noqa: F401 pylint: disable=unused-import
 from service.common import status  # HTTP Status Codes
 
 
