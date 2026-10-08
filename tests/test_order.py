@@ -145,12 +145,17 @@ class TestOrder(TestCase):
         order.id = None
         self.assertRaises(DataValidationError, order.update)
 
-    @patch("service.models.db.session.commit")
-    def test_update_order_failed(self, exception_mock):
+    def test_update_order_failed(self):
         """It should not Update an Order on database error"""
-        exception_mock.side_effect = Exception()
-        order = OrderFactory()
-        self.assertRaises(DataValidationError, order.update)
+        order = OrderFactory(status=OrderStatus.NEW)
+        order.create()
+        order.status = OrderStatus.CANCELLED
+        with patch("service.models.db.session.commit") as commit_mock:
+            commit_mock.side_effect = Exception()
+            self.assertRaises(DataValidationError, order.update)
+            commit_mock.assert_called_once()
+        # the change should have been rolled back
+        self.assertEqual(Order.find(order.id).status, OrderStatus.NEW)
 
     def test_delete_an_order(self):
         """It should Delete an Order from the database"""
@@ -172,12 +177,16 @@ class TestOrder(TestCase):
         self.assertEqual(len(Order.all()), 0)
         self.assertEqual(len(Item.all()), 0)
 
-    @patch("service.models.db.session.commit")
-    def test_delete_order_failed(self, exception_mock):
+    def test_delete_order_failed(self):
         """It should not Delete an Order on database error"""
-        exception_mock.side_effect = Exception()
         order = OrderFactory()
-        self.assertRaises(DataValidationError, order.delete)
+        order.create()
+        with patch("service.models.db.session.commit") as commit_mock:
+            commit_mock.side_effect = Exception()
+            self.assertRaises(DataValidationError, order.delete)
+            commit_mock.assert_called_once()
+        # the Order should still be in the database
+        self.assertIsNotNone(Order.find(order.id))
 
     def test_list_all_orders(self):
         """It should List all Orders in the database"""
@@ -278,6 +287,13 @@ class TestOrder(TestCase):
         order = Order()
         data = {"customer_id": 1, "items": [{"product_id": 1}]}
         self.assertRaises(DataValidationError, order.deserialize, data)
+
+    def test_deserialize_items_not_a_list(self):
+        """It should not Deserialize an Order when items is not a list"""
+        order = Order()
+        for items in [{}, "", "abc", 5, None]:
+            data = {"customer_id": 1, "items": items}
+            self.assertRaises(DataValidationError, order.deserialize, data)
 
     def test_deserialize_with_type_error(self):
         """It should not Deserialize an Order with a TypeError"""

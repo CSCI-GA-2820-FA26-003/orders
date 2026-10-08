@@ -82,7 +82,10 @@ class Order(db.Model, PersistentBase):
             self.customer_id = _to_int(data["customer_id"], "customer_id")
             self.status = OrderStatus[data.get("status", OrderStatus.NEW.name)]
             # handle inner list of items
-            for json_item in data.get("items", []):
+            json_items = data.get("items", [])
+            if not isinstance(json_items, list):
+                raise DataValidationError("Invalid Order: items must be a list")
+            for json_item in json_items:
                 item = Item()
                 item.deserialize(json_item)
                 self.items.append(item)

@@ -115,6 +115,47 @@ class TestItem(TestCase):
         item = Item(product_id=1, quantity=1, unit_price=Decimal("1.00"))  # pylint: disable=unexpected-keyword-arg
         self.assertRaises(DataValidationError, item.create)
 
+    def test_create_item_with_bad_quantity(self):
+        """It should not Create an Item with a quantity out of range"""
+        for quantity in [0, 1000]:
+            order = OrderFactory()
+            ItemFactory(order=order, quantity=quantity)
+            self.assertRaises(DataValidationError, order.create)
+        self.assertEqual(Item.all(), [])
+
+    def test_update_item_with_bad_quantity(self):
+        """It should not Update an Item with a quantity out of range"""
+        order = OrderFactory()
+        ItemFactory(order=order, quantity=1)
+        order.create()
+        item = Order.find(order.id).items[0]
+        item.quantity = 1000
+        self.assertRaises(DataValidationError, item.update)
+        self.assertEqual(Item.find(item.id).quantity, 1)
+
+    def test_update_item_keeps_order(self):
+        """It should keep the Order of an Item when order_id is not given"""
+        order = OrderFactory()
+        ItemFactory(order=order)
+        order.create()
+        item = Order.find(order.id).items[0]
+        item.deserialize({"product_id": 7, "quantity": 2, "unit_price": "3.50"})
+        item.update()
+        found = Item.find(item.id)
+        self.assertEqual(found.order_id, order.id)
+        self.assertEqual(found.product_id, 7)
+        self.assertEqual(found.quantity, 2)
+
+    def test_price_saved_without_change(self):
+        """It should Save and Reload a unit_price without changing it"""
+        order = OrderFactory()
+        item = Item().deserialize({"product_id": 1, "quantity": 3, "unit_price": "1.23"})
+        order.items.append(item)
+        order.create()
+        found = Item.find(item.id)
+        self.assertEqual(found.unit_price, Decimal("1.23"))
+        self.assertEqual(found.line_total, Decimal("3.69"))
+
     def test_line_total(self):
         """It should calculate the line total as quantity x unit_price"""
         item = ItemFactory(quantity=3, unit_price=Decimal("19.99"))
@@ -141,6 +182,12 @@ class TestItem(TestCase):
         self.assertEqual(new_item.product_id, item.product_id)
         self.assertEqual(new_item.quantity, item.quantity)
         self.assertEqual(new_item.unit_price, item.unit_price)
+
+    def test_deserialize_price_bounds(self):
+        """It should Deserialize a unit_price of 0 or the largest allowed value"""
+        for price in ["0", "99999999.99", 19.99, 5]:
+            data = {"product_id": 1, "quantity": 1, "unit_price": price}
+            self.assertEqual(Item().deserialize(data).unit_price, Decimal(str(price)))
 
     def test_deserialize_price_as_string(self):
         """It should Deserialize a unit_price given as a string"""
@@ -177,7 +224,7 @@ class TestItem(TestCase):
     def test_deserialize_bad_price(self):
         """It should not Deserialize an Item with a bad unit_price"""
         item = Item()
-        for price in ["abc", -1, "NaN", "Infinity", True, None]:
+        for price in ["abc", -1, "NaN", "Infinity", True, None, "1.234", 0.001, "100000000.00"]:
             data = {"product_id": 1, "quantity": 1, "unit_price": price}
             self.assertRaises(DataValidationError, item.deserialize, data)
 
