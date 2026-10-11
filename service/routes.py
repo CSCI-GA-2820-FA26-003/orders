@@ -43,4 +43,17 @@ def index():
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
 
-# Todo: Place your REST API code here ...
+
+######################################################################
+# LIST ALL ORDERS
+######################################################################
+@app.route("/orders", methods=["GET"])
+def list_orders():
+    """Returns all of the Orders"""
+    app.logger.info("Request for order list")
+
+    orders = Order.all()
+
+    results = [order.serialize() for order in orders]
+    app.logger.info("Returning %d orders", len(results))
+    return jsonify(results), status.HTTP_200_OK
