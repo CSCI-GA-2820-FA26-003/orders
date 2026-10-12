@@ -75,6 +75,90 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     ######################################################################
+    #  C R E A T E   A N   O R D E R
+    ######################################################################
+
+    def test_create_an_order(self):
+        """It should Create an Order"""
+        payload = {"customer_id": 123}
+
+        resp = self.client.post("/orders", json=payload)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertIsNotNone(data["id"])
+        self.assertEqual(data["customer_id"], 123)
+        self.assertEqual(data["status"], "NEW")
+        self.assertEqual(data["items"], [])
+        self.assertEqual(
+            resp.headers["Location"], f"http://localhost/orders/{data['id']}"
+        )
+        self.assertIsNotNone(Order.find(data["id"]))
+
+    def test_create_order_without_customer_id(self):
+        """It should not Create an Order without a customer ID"""
+        resp = self.client.post("/orders", json={})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.all(), [])
+
+    def test_create_order_with_invalid_customer_id(self):
+        """It should not Create an Order with an invalid customer ID"""
+        resp = self.client.post("/orders", json={"customer_id": "invalid"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.all(), [])
+
+    def test_create_order_with_boolean_customer_id(self):
+        """It should not Create an Order with a boolean customer ID"""
+        resp = self.client.post("/orders", json={"customer_id": True})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.all(), [])
+
+    def test_create_order_with_items(self):
+        """It should Create an Order containing Items"""
+        payload = {
+            "customer_id": 123,
+            "items": [
+                {"product_id": 456, "quantity": 2, "unit_price": 10.50},
+                {"product_id": 789, "quantity": 1, "unit_price": 5.25},
+            ],
+        }
+
+        resp = self.client.post("/orders", json=payload)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        data = resp.get_json()
+        self.assertEqual(len(data["items"]), 2)
+        self.assertEqual(data["subtotal"], 26.25)
+        self.assertEqual(data["items"][0]["order_id"], data["id"])
+        self.assertEqual(data["items"][1]["order_id"], data["id"])
+        self.assertEqual(len(Order.find(data["id"]).items), 2)
+
+    def test_create_order_with_invalid_items(self):
+        """It should not Create an Order when Items is not a list"""
+        resp = self.client.post(
+            "/orders", json={"customer_id": 123, "items": "invalid"}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.all(), [])
+
+    def test_create_order_with_malformed_json(self):
+        """It should not Create an Order from malformed JSON"""
+        resp = self.client.post(
+            "/orders", data='{"customer_id":', content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.all(), [])
+
+    def test_create_order_without_json(self):
+        """It should not Create an Order without JSON content"""
+        resp = self.client.post(
+            "/orders", data="customer_id=123", content_type="text/plain"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+        self.assertEqual(Order.all(), [])
+
+    ######################################################################
     #  L I S T   O R D E R S
     ######################################################################
 
