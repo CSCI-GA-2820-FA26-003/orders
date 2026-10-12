@@ -75,6 +75,43 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     ######################################################################
+    #  C R E A T E   A N   O R D E R
+    ######################################################################
+
+    def test_create_an_order(self):
+        """It should Create an Order"""
+        payload = {"customer_id": 123}
+
+        resp = self.client.post("/orders", json=payload)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertIsNotNone(data["id"])
+        self.assertEqual(data["customer_id"], 123)
+        self.assertEqual(data["status"], "NEW")
+        self.assertEqual(data["items"], [])
+        self.assertEqual(resp.headers["Location"], f"http://localhost/orders/{data['id']}")
+        self.assertIsNotNone(Order.find(data["id"]))
+
+    def test_create_order_without_customer_id(self):
+        """It should not Create an Order without a customer ID"""
+        resp = self.client.post("/orders", json={})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_order_with_invalid_customer_id(self):
+        """It should not Create an Order with an invalid customer ID"""
+        resp = self.client.post("/orders", json={"customer_id": "invalid"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_order_without_json(self):
+        """It should not Create an Order without JSON content"""
+        resp = self.client.post(
+            "/orders", data="customer_id=123", content_type="text/plain"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
+    ######################################################################
     #  L I S T   O R D E R S
     ######################################################################
 

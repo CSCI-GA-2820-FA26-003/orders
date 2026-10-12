@@ -45,6 +45,28 @@ def index():
 
 
 ######################################################################
+# CREATE AN ORDER
+######################################################################
+@app.route("/orders", methods=["POST"])
+def create_order():
+    """Creates a new Order"""
+    app.logger.info("Request to create an Order")
+
+    if not request.is_json:
+        abort(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            description="Content-Type must be application/json",
+        )
+
+    order = Order()
+    order.deserialize(request.get_json())
+    order.create()
+
+    location_url = f'{url_for("list_orders", _external=True)}/{order.id}'
+    return jsonify(order.serialize()), status.HTTP_201_CREATED, {"Location": location_url}
+
+
+######################################################################
 # LIST ALL ORDERS
 ######################################################################
 @app.route("/orders", methods=["GET"])
