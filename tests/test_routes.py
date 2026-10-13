@@ -203,3 +203,78 @@ class TestOrderService(TestCase):
         resp = self.client.get("/orders")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json(), [])
+
+    ######################################################################
+    #  D E L E T E   O R D E R S
+    ######################################################################
+
+    def test_delete_order_with_items(self):
+        """It should delete only the requested Order and all its Items"""
+        order = OrderFactory()
+        ItemFactory(order=order)
+        ItemFactory(order=order)
+        order.create()
+        other_order = self._create_orders(1)[0]
+        order_id = order.id
+        item_ids = [item.id for item in order.items]
+        other_order_id = other_order.id
+        other_item_ids = [item.id for item in other_order.items]
+        db.session.remove()
+
+        resp = self.client.delete(f"/orders/{order_id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.data, b"")
+        db.session.remove()
+        self.assertIsNone(Order.find(order_id))
+        for item_id in item_ids:
+            self.assertIsNone(Item.find(item_id))
+        self.assertEqual([order.id for order in Order.all()], [other_order_id])
+        self.assertEqual([item.id for item in Item.all()], other_item_ids)
+        self.assertEqual(Item.find(other_item_ids[0]).order_id, other_order_id)
+
+    def test_delete_empty_order(self):
+        """It should delete an empty Order with a 204 and an empty body"""
+        order = OrderFactory()
+        order.create()
+        order_id = order.id
+        db.session.remove()
+
+        resp = self.client.delete(f"/orders/{order_id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.data, b"")
+        db.session.remove()
+        self.assertIsNone(Order.find(order_id))
+        self.assertEqual(Item.all(), [])
+
+    def test_delete_missing_order(self):
+        """It should return a JSON 404 for a missing Order and preserve existing data"""
+        order = self._create_orders(1)[0]
+        order_id, item_id = order.id, order.items[0].id
+
+        resp = self.client.delete("/orders/0")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Order with id [0] was not found", data["message"])
+        db.session.remove()
+        self.assertIsNotNone(Order.find(order_id))
+        self.assertEqual(Item.find(item_id).order_id, order_id)
+
+    def test_delete_order_twice(self):
+        """It should return a JSON 404 when deleting an Order a second time"""
+        order = OrderFactory()
+        order.create()
+        order_id = order.id
+
+        resp = self.client.delete(f"/orders/{order_id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.data, b"")
+        resp = self.client.delete(f"/orders/{order_id}")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn(f"Order with id [{order_id}] was not found", data["message"])
