@@ -23,7 +23,7 @@ and Delete Orders
 
 from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
-from service.models import Order, Item  # noqa: F401 pylint: disable=unused-import
+from service.models import Order, Item
 from service.common import status  # HTTP Status Codes
 
 
@@ -97,4 +97,30 @@ def delete_order(order_id):
 
     order.delete()
     app.logger.info("Order with id: %s deleted", order_id)
+    return "", status.HTTP_204_NO_CONTENT
+
+
+######################################################################
+# DELETE AN ITEM FROM AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["DELETE"])
+def delete_order_item(order_id, item_id):
+    """Deletes an Item belonging to the specified Order, returning no content"""
+    app.logger.info("Request to delete Item with id: %s from Order with id: %s", item_id, order_id)
+    order = Order.find(order_id)
+    if order is None:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Order with id [{order_id}] was not found",
+        )
+
+    item = Item.find(item_id)
+    if item is None or item.order_id != order_id:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Item with id [{item_id}] was not found in Order with id [{order_id}]",
+        )
+
+    item.delete()
+    app.logger.info("Item with id: %s deleted from Order with id: %s", item_id, order_id)
     return "", status.HTTP_204_NO_CONTENT

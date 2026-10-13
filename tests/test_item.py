@@ -110,6 +110,48 @@ class TestItem(TestCase):
         self.assertEqual(len(order.items), 0)
         self.assertEqual(len(Order.all()), 1)
 
+    def test_delete_item_preserves_order_and_other_items(self):
+        """It should delete one Item, recalculate subtotal, and preserve other data"""
+        order = OrderFactory()
+        item = ItemFactory(order=order, quantity=2, unit_price=Decimal("8.25"))
+        sibling = ItemFactory(order=order, quantity=3, unit_price=Decimal("4.25"))
+        order.create()
+        other_order = OrderFactory()
+        other_item = ItemFactory(order=other_order)
+        other_order.create()
+        order_id, item_id, sibling_id = order.id, item.id, sibling.id
+        other_order_id, other_item_id = other_order.id, other_item.id
+        other_data = other_order.serialize()
+        self.assertEqual(order.subtotal, Decimal("29.25"))
+
+        item.delete()
+        db.session.remove()
+
+        self.assertIsNone(Item.find(item_id))
+        found = Order.find(order_id)
+        self.assertEqual([item.id for item in found.items], [sibling_id])
+        self.assertEqual(found.subtotal, Decimal("12.75"))
+        self.assertEqual(Item.find(other_item_id).order_id, other_order_id)
+        self.assertEqual(Order.find(other_order_id).serialize(), other_data)
+        self.assertEqual(len(Order.all()), 2)
+        self.assertEqual(len(Item.all()), 2)
+
+    def test_delete_last_item_preserves_empty_order(self):
+        """It should leave the Order with a zero subtotal when its last Item is deleted"""
+        order = OrderFactory()
+        item = ItemFactory(order=order)
+        order.create()
+        order_id, item_id = order.id, item.id
+
+        item.delete()
+        db.session.remove()
+
+        self.assertIsNone(Item.find(item_id))
+        found = Order.find(order_id)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.items, [])
+        self.assertEqual(found.subtotal, Decimal("0.00"))
+
     def test_create_item_without_order(self):
         """It should not Create an Item that does not belong to an Order"""
         item = Item(product_id=1, quantity=1, unit_price=Decimal("1.00"))  # pylint: disable=unexpected-keyword-arg

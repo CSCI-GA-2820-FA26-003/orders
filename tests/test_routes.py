@@ -21,6 +21,7 @@ Orders API Service Test Suite
 # pylint: disable=duplicate-code
 import os
 import logging
+from decimal import Decimal
 from unittest import TestCase
 from wsgi import app
 from service.common import status
@@ -278,3 +279,117 @@ class TestOrderService(TestCase):
         self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
         self.assertEqual(data["error"], "Not Found")
         self.assertIn(f"Order with id [{order_id}] was not found", data["message"])
+
+    ######################################################################
+    #  D E L E T E   O R D E R   I T E M S
+    ######################################################################
+
+    def _assert_delete_item_not_found(self, resp, message):
+        """Checks that a missing Order or Item returns the common JSON error"""
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn(message, data["message"])
+
+    def test_delete_item_preserves_order_and_other_items(self):
+        """It should delete only the requested Item and recalculate its Order's subtotal"""
+        order = OrderFactory()
+        item = ItemFactory(order=order, quantity=2, unit_price=Decimal("8.25"))
+        sibling = ItemFactory(order=order, quantity=3, unit_price=Decimal("4.25"))
+        order.create()
+        other_order = self._create_orders(1)[0]
+        other_data = other_order.serialize()
+        order_id, item_id, sibling_id = order.id, item.id, sibling.id
+        other_order_id = other_order.id
+        self.assertEqual(order.subtotal, Decimal("29.25"))
+        db.session.remove()
+
+        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.data, b"")
+        db.session.remove()
+        self.assertIsNone(Item.find(item_id))
+        found = Order.find(order_id)
+        self.assertIsNotNone(found)
+        self.assertEqual([item.id for item in found.items], [sibling_id])
+        self.assertEqual(found.subtotal, Decimal("12.75"))
+        self.assertEqual(Order.find(other_order_id).serialize(), other_data)
+        self.assertEqual(len(Order.all()), 2)
+        self.assertEqual(len(Item.all()), 2)
+
+    def test_delete_last_item_keeps_empty_order(self):
+        """It should keep an empty Order with zero subtotal after deleting its last Item"""
+        order = self._create_orders(1)[0]
+        order_id, item_id = order.id, order.items[0].id
+        db.session.remove()
+
+        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.data, b"")
+        db.session.remove()
+        self.assertIsNone(Item.find(item_id))
+        found = Order.find(order_id)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.items, [])
+        self.assertEqual(found.subtotal, Decimal("0.00"))
+
+    def test_delete_item_missing_order(self):
+        """It should return a JSON 404 when the Order does not exist and preserve the Item"""
+        order = self._create_orders(1)[0]
+        order_id, item_id = order.id, order.items[0].id
+        data = order.serialize()
+
+        resp = self.client.delete(f"/orders/0/items/{item_id}")
+        self._assert_delete_item_not_found(resp, "Order with id [0] was not found")
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), data)
+        self.assertEqual(Item.find(item_id).order_id, order_id)
+
+    def test_delete_item_missing_item(self):
+        """It should return a JSON 404 when the Item does not exist and preserve the Order"""
+        order = self._create_orders(1)[0]
+        order_id = order.id
+        missing_item_id = order.items[0].id + 100000
+        data = order.serialize()
+
+        resp = self.client.delete(f"/orders/{order_id}/items/{missing_item_id}")
+        self._assert_delete_item_not_found(
+            resp, f"Item with id [{missing_item_id}] was not found in Order with id [{order_id}]"
+        )
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), data)
+
+    def test_delete_item_from_wrong_order(self):
+        """It should reject an Item belonging to a different Order without changing either"""
+        orders = self._create_orders(2)
+        order, other_order = orders[0], orders[1]
+        order_id, other_order_id = order.id, other_order.id
+        item_id = other_order.items[0].id
+        data, other_data = order.serialize(), other_order.serialize()
+
+        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        self._assert_delete_item_not_found(
+            resp, f"Item with id [{item_id}] was not found in Order with id [{order_id}]"
+        )
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), data)
+        self.assertEqual(Order.find(other_order_id).serialize(), other_data)
+        self.assertEqual(Item.find(item_id).order_id, other_order_id)
+
+    def test_delete_item_twice(self):
+        """It should return a JSON 404 on repeated deletion and keep the Order"""
+        order = self._create_orders(1)[0]
+        order_id, item_id = order.id, order.items[0].id
+        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.data, b"")
+
+        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        self._assert_delete_item_not_found(
+            resp, f"Item with id [{item_id}] was not found in Order with id [{order_id}]"
+        )
+        db.session.remove()
+        self.assertIsNotNone(Order.find(order_id))
+        self.assertEqual(Order.find(order_id).items, [])

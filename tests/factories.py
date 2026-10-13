@@ -43,7 +43,8 @@ class ItemFactory(Factory):
 
         model = Item
 
-    id = Sequence(lambda n: n)
+    # Let PostgreSQL allocate IDs so factory Items cannot collide with its sequence.
+    id = None
     order_id = None
     product_id = FuzzyInteger(1, 10000)
     quantity = FuzzyInteger(1, 10)
