@@ -84,6 +84,20 @@ This follows Issue #2's explicit 404 requirement for a missing order. REST
 lecture slides 42 and 44 suggest 204 for missing or repeated deletions; the
 current Story takes precedence.
 
+## Delete an item from an order
+
+```bash
+curl -i -X DELETE http://localhost:8080/orders/123/items/456
+```
+
+- **204 No Content:** Only the specified Item belonging to this order is deleted,
+  and the response body is empty. The order, its remaining Items, and other orders
+  are preserved. The order's computed `subtotal` reflects the remaining Items.
+  Deleting the last Item leaves an empty order with a subtotal of zero.
+- **404 Not Found:** The order or Item does not exist, or the Item belongs to a
+  different order. Repeated deletion also returns 404. Errors use the common JSON
+  `status`, `error`, and `message` format.
+
 ## License
 
 Copyright (c) 2016, 2025 [John Rofrano](https://www.linkedin.com/in/JohnRofrano/). All rights reserved.
