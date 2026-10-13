@@ -60,6 +60,30 @@ tests/                     - test cases package
 └── test_routes.py         - test suite for service routes
 ```
 
+## Delete an order
+
+With the service running via `honcho start` in the development container, delete
+an order by its ID:
+
+```bash
+curl -i -X DELETE http://localhost:8080/orders/123
+```
+
+- **204 No Content:** The order and all associated Items are deleted in the same
+  database transaction. The response body is empty. Empty orders can also be
+  deleted. Other orders and their Items are unaffected.
+- **404 Not Found:** The ID does not exist, including a second deletion of the
+  same order. The JSON error follows the service's `status`, `error`, and
+  `message` format, for example:
+
+  ```json
+  {"status": 404, "error": "Not Found", "message": "404 Not Found: Order with id [123] was not found"}
+  ```
+
+This follows Issue #2's explicit 404 requirement for a missing order. REST
+lecture slides 42 and 44 suggest 204 for missing or repeated deletions; the
+current Story takes precedence.
+
 ## License
 
 Copyright (c) 2016, 2025 [John Rofrano](https://www.linkedin.com/in/JohnRofrano/). All rights reserved.

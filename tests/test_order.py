@@ -188,6 +188,32 @@ class TestOrder(TestCase):
         # the Order should still be in the database
         self.assertIsNotNone(Order.find(order.id))
 
+    def test_delete_order_with_unloaded_items_preserves_other_orders(self):
+        """It should cascade in PostgreSQL without deleting another Order's Items"""
+        order = OrderFactory()
+        items = [ItemFactory(order=order), ItemFactory(order=order)]
+        order.create()
+        order_id = order.id
+        item_ids = [item.id for item in items]
+        other_order = OrderFactory()
+        other_item = ItemFactory(order=other_order)
+        other_order.create()
+        other_order_id, other_item_id = other_order.id, other_item.id
+
+        # A new session leaves the relationship unloaded, exercising ON DELETE CASCADE.
+        db.session.remove()
+        order = Order.find(order_id)
+        self.assertNotIn("items", order.__dict__)
+        order.delete()
+        db.session.remove()
+
+        self.assertIsNone(Order.find(order_id))
+        for item_id in item_ids:
+            self.assertIsNone(Item.find(item_id))
+        self.assertEqual([order.id for order in Order.all()], [other_order_id])
+        self.assertEqual([item.id for item in Item.all()], [other_item_id])
+        self.assertEqual(Item.find(other_item_id).order_id, other_order_id)
+
     def test_list_all_orders(self):
         """It should List all Orders in the database"""
         self.assertEqual(Order.all(), [])
