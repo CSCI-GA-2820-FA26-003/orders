@@ -48,14 +48,28 @@ class TestErrorHandlers(TestCase):
         """This runs after each test"""
         self.ctx.pop()
 
-    def _assert_error(self, response, code: int, error: str, message: str):
+    def _assert_error(
+        self,
+        response,
+        code: int,
+        error_code: str,
+        message: str,
+        details=None,
+    ):
         """Checks the response tuple returned by an error handler"""
         body, status_code = response
         self.assertEqual(status_code, code)
+        self.assertIn("application/json", body.mimetype)
         data = body.get_json()
         self.assertEqual(data["status"], code)
-        self.assertEqual(data["error"], error)
-        self.assertEqual(data["message"], message)
+        self.assertEqual(data["error"]["code"], error_code)
+        self.assertEqual(data["error"]["message"], message)
+        self.assertIn("request_id", data["error"])
+        self.assertEqual(data["error"]["request_id"], response[0].headers["X-Request-ID"])
+        if details is None:
+            self.assertNotIn("details", data["error"])
+        else:
+            self.assertEqual(data["error"]["details"], details)
 
     def test_data_validation_error(self):
         """It should return 400 for a DataValidationError"""
@@ -63,23 +77,33 @@ class TestErrorHandlers(TestCase):
             DataValidationError("bad data")
         )
         self._assert_error(
-            response, status.HTTP_400_BAD_REQUEST, "Bad Request", "bad data"
+            response,
+            status.HTTP_400_BAD_REQUEST,
+            "validation_error",
+            "bad data",
+            details=[{"field": "request", "reason": "bad data"}],
         )
 
     def test_bad_request(self):
         """It should return 400 for a bad request"""
         response = error_handlers.bad_request("bad request")
         self._assert_error(
-            response, status.HTTP_400_BAD_REQUEST, "Bad Request", "bad request"
+            response,
+            status.HTTP_400_BAD_REQUEST,
+            "validation_error",
+            "bad request",
+            details=[{"field": "request", "reason": "bad request"}],
         )
 
     def test_not_found(self):
         """It should return 404 for a URL that does not exist"""
         resp = self.client.get("/no-such-url")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn("application/json", resp.content_type)
         data = resp.get_json()
         self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
-        self.assertEqual(data["error"], "Not Found")
+        self.assertEqual(data["error"]["code"], "not_found")
+        self.assertIn("request_id", data["error"])
 
     def test_method_not_allowed(self):
         """It should return 405 for a method that is not supported"""
@@ -87,7 +111,7 @@ class TestErrorHandlers(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         data = resp.get_json()
         self.assertEqual(data["status"], status.HTTP_405_METHOD_NOT_ALLOWED)
-        self.assertEqual(data["error"], "Method not Allowed")
+        self.assertEqual(data["error"]["code"], "method_not_allowed")
 
     def test_unsupported_media_type(self):
         """It should return 415 for an unsupported media type"""
@@ -95,16 +119,27 @@ class TestErrorHandlers(TestCase):
         self._assert_error(
             response,
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            "Unsupported media type",
+            "unsupported_media",
             "bad media type",
         )
 
     def test_internal_server_error(self):
         """It should return 500 for an internal server error"""
-        response = error_handlers.internal_server_error("server error")
+        response = error_handlers.internal_server_error(RuntimeError("internal details"))
         self._assert_error(
             response,
             status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "Internal Server Error",
-            "server error",
+            "internal_error",
+            "An unexpected error occurred.",
+        )
+        self.assertNotIn("internal details", response[0].get_data(as_text=True))
+
+    def test_service_unavailable(self):
+        """It should return 503 for an unavailable service"""
+        response = error_handlers.service_unavailable(RuntimeError("degraded service"))
+        self._assert_error(
+            response,
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "unavailable",
+            "The service is temporarily unavailable.",
         )
