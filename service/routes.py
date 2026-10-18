@@ -128,3 +128,28 @@ def delete_order_item(order_id, item_id):
     item.delete()
     app.logger.info("Item with id: %s deleted from Order with id: %s", item_id, order_id)
     return "", status.HTTP_204_NO_CONTENT
+
+
+######################################################################
+# READ AN ITEM FROM AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["GET"])
+def read_order_item(order_id, item_id):
+    """Returns an Item only when it belongs to the specified Order"""
+    app.logger.info("Request to read Item with id: %s from Order with id: %s", item_id, order_id)
+    order = Order.find(order_id)
+    if order is None:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Order with id [{order_id}] was not found",
+        )
+
+    item = Item.find(item_id)
+    if item is None or item.order_id != order_id:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Item with id [{item_id}] was not found in Order with id [{order_id}]",
+        )
+
+    app.logger.info("Returning Item with id: %s from Order with id: %s", item_id, order_id)
+    return jsonify(item.serialize()), status.HTTP_200_OK

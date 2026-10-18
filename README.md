@@ -103,6 +103,24 @@ This follows Issue #2's explicit 404 requirement for a missing order. REST
 lecture slides 42 and 44 suggest 204 for missing or repeated deletions; the
 current Story takes precedence.
 
+## Read an item from an order
+
+```bash
+curl -i http://localhost:8080/orders/123/items/456
+```
+
+`GET /orders/{order_id}/items/{item_id}` returns **200 OK** with
+`Content-Type: application/json` and the Item's `id`, `order_id`, `product_id`,
+`quantity`, `unit_price`, and computed `line_total`. For example:
+
+```json
+{"id": 456, "order_id": 123, "product_id": 789, "quantity": 2, "unit_price": 12.5, "line_total": 25.0}
+```
+
+If the order or Item does not exist, or the Item belongs to a different order,
+the endpoint returns **404 Not Found** using the common JSON error format.
+Reading an Item does not modify its order or any Items.
+
 ## Delete an item from an order
 
 ```bash

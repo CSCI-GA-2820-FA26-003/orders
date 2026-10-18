@@ -410,3 +410,94 @@ class TestOrderService(TestCase):
         db.session.remove()
         self.assertIsNotNone(Order.find(order_id))
         self.assertEqual(Order.find(order_id).items, [])
+
+    ######################################################################
+    #  R E A D   A N   O R D E R   I T E M
+    ######################################################################
+
+    def _assert_read_item_not_found(self, resp, message):
+        """Checks the common JSON response for an Item lookup that cannot be resolved"""
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn(message, data["message"])
+
+    def test_read_order_item(self):
+        """It should return the requested Item's fields without changing any data"""
+        order = OrderFactory()
+        item = ItemFactory(order=order, product_id=123, quantity=3, unit_price=Decimal("2.35"))
+        ItemFactory(order=order)
+        order.create()
+        other_order = self._create_orders(1)[0]
+        order_id, item_id, other_order_id = order.id, item.id, other_order.id
+        before, other_before = order.serialize(), other_order.serialize()
+        db.session.remove()
+
+        resp = self.client.get(f"/orders/{order_id}/items/{item_id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertEqual(
+            resp.get_json(),
+            {"id": item_id, "order_id": order_id, "product_id": 123,
+             "quantity": 3, "unit_price": 2.35, "line_total": 7.05},
+        )
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), before)
+        self.assertEqual(Order.find(other_order_id).serialize(), other_before)
+        self.assertEqual(len(Order.all()), 2)
+        self.assertEqual(len(Item.all()), 3)
+
+    def test_read_item_missing_order(self):
+        """It should return JSON 404 when the parent Order does not exist"""
+        order = self._create_orders(1)[0]
+        order_id, item_id = order.id, order.items[0].id
+        before = order.serialize()
+
+        resp = self.client.get(f"/orders/0/items/{item_id}")
+        self._assert_read_item_not_found(resp, "Order with id [0] was not found")
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), before)
+
+    def test_read_item_missing_item(self):
+        """It should return JSON 404 when the Item does not exist"""
+        order = self._create_orders(1)[0]
+        order_id = order.id
+        before = order.serialize()
+
+        resp = self.client.get(f"/orders/{order_id}/items/0")
+        self._assert_read_item_not_found(
+            resp, f"Item with id [0] was not found in Order with id [{order_id}]"
+        )
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), before)
+
+    def test_read_item_from_empty_order(self):
+        """It should return JSON 404 for an empty Order without changing it"""
+        order = OrderFactory()
+        order.create()
+        order_id = order.id
+        before = order.serialize()
+
+        resp = self.client.get(f"/orders/{order_id}/items/0")
+        self._assert_read_item_not_found(
+            resp, f"Item with id [0] was not found in Order with id [{order_id}]"
+        )
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), before)
+
+    def test_read_item_from_wrong_order(self):
+        """It should not expose an Item through a different Order's URL"""
+        orders = self._create_orders(2)
+        order, other_order = orders[0], orders[1]
+        order_id, other_order_id, item_id = order.id, other_order.id, other_order.items[0].id
+        before, other_before = order.serialize(), other_order.serialize()
+
+        resp = self.client.get(f"/orders/{order_id}/items/{item_id}")
+        self._assert_read_item_not_found(
+            resp, f"Item with id [{item_id}] was not found in Order with id [{order_id}]"
+        )
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), before)
+        self.assertEqual(Order.find(other_order_id).serialize(), other_before)
