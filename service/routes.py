@@ -153,3 +153,22 @@ def read_order_item(order_id, item_id):
 
     app.logger.info("Returning Item with id: %s from Order with id: %s", item_id, order_id)
     return jsonify(item.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# LIST ALL ITEMS IN AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>/items", methods=["GET"])
+def list_order_items(order_id):
+    """Returns all Items belonging to the specified Order."""
+    app.logger.info("Request for Items in Order with id: %s", order_id)
+    order = Order.find(order_id)
+    if order is None:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Order with id [{order_id}] was not found",
+        )
+
+    results = [item.serialize() for item in order.items]
+    app.logger.info("Returning %d Items for Order with id: %s", len(results), order_id)
+    return jsonify(results), status.HTTP_200_OK

@@ -501,3 +501,71 @@ class TestOrderService(TestCase):
         db.session.remove()
         self.assertEqual(Order.find(order_id).serialize(), before)
         self.assertEqual(Order.find(other_order_id).serialize(), other_before)
+
+    ######################################################################
+    #  L I S T   O R D E R   I T E M S
+    ######################################################################
+
+    def test_list_order_items(self):
+        """It should list all Items belonging to an Order without changing any data."""
+        order = OrderFactory()
+        for product_id, quantity, price in ((101, 2, "3.25"), (102, 3, "4.50"), (103, 1, "0.00")):
+            ItemFactory(order=order, product_id=product_id, quantity=quantity, unit_price=Decimal(price))
+        order.create()
+        other_order = self._create_orders(1)[0]
+        order_id, other_order_id = order.id, other_order.id
+        before, other_before = order.serialize(), other_order.serialize()
+        db.session.remove()
+
+        resp = self.client.get(f"/orders/{order_id}/items")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 3)
+        self.assertEqual(data, before["items"])
+        self.assertTrue(all(item["order_id"] == order_id for item in data))
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), before)
+        self.assertEqual(Order.find(other_order_id).serialize(), other_before)
+        self.assertEqual(len(Item.all()), 4)
+
+    def test_list_empty_order_items(self):
+        """It should return a JSON empty array for an existing Order with no Items."""
+        order = OrderFactory()
+        order.create()
+        order_id = order.id
+        before = order.serialize()
+        self._create_orders(1)
+        db.session.remove()
+
+        resp = self.client.get(f"/orders/{order_id}/items")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertEqual(resp.get_json(), [])
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), before)
+        self.assertEqual(len(Item.all()), 1)
+
+    def test_list_items_missing_order(self):
+        """It should return a JSON 404 for a missing Order and preserve existing data."""
+        order = self._create_orders(1)[0]
+        order_id = order.id
+        before = order.serialize()
+        missing_id = order_id + 100000
+        db.session.remove()
+
+        resp = self.client.get(f"/orders/{missing_id}/items")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn(f"Order with id [{missing_id}] was not found", data["message"])
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), before)
+        self.assertEqual(len(Order.all()), 1)
+        self.assertEqual(len(Item.all()), 1)
