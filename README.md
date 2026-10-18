@@ -60,6 +60,25 @@ tests/                     - test cases package
 └── test_routes.py         - test suite for service routes
 ```
 
+## Service information
+
+With the service running in the development container via `honcho start`, request
+the root endpoint to discover the service and Orders collection:
+
+```bash
+curl -i http://localhost:8080/
+```
+
+`GET /` returns **200 OK** with `Content-Type: application/json`:
+
+```json
+{
+  "name": "Orders Service",
+  "version": "1.0.0",
+  "endpoints": {"orders": "/orders"}
+}
+```
+
 ## Delete an order
 
 With the service running via `honcho start` in the development container, delete
