@@ -760,6 +760,29 @@ class TestOrderService(TestCase):
         self.assertEqual(found.quantity, 3)
         self.assertEqual(found.unit_price, Decimal("2.50"))
 
+    def test_update_order_item_price_only(self):
+        """It should change only the price and recalculate totals"""
+        order = OrderFactory()
+        item = ItemFactory(order=order, quantity=2, unit_price=Decimal("8.25"))
+        order.create()
+        order_id, item_id = order.id, item.id
+        db.session.remove()
+
+        resp = self.client.put(
+            f"/orders/{order_id}/items/{item_id}", json={"unit_price": "3.50"}
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["quantity"], 2)
+        self.assertEqual(data["unit_price"], 3.5)
+        self.assertEqual(data["line_total"], 7.0)
+        db.session.remove()
+        found = Item.find(item_id)
+        self.assertEqual(found.quantity, 2)
+        self.assertEqual(found.unit_price, Decimal("3.50"))
+        self.assertEqual(Order.find(order_id).subtotal, Decimal("7.00"))
+
     def test_update_missing_order_item(self):
         """It should return 404 when the parent Order does not exist"""
         resp = self.client.put("/orders/0/items/1", json={"quantity": 2})
@@ -801,6 +824,41 @@ class TestOrderService(TestCase):
         found = Item.find(item.id)
         self.assertEqual(found.quantity, 2)
         self.assertEqual(found.unit_price, Decimal("8.25"))
+
+    def test_update_item_rejects_invalid_body_and_values(self):
+        """It should reject invalid requests without changing the saved Item"""
+        order = OrderFactory()
+        item = ItemFactory(order=order, quantity=2, unit_price=Decimal("8.25"))
+        order.create()
+        order_id, item_id = order.id, item.id
+        before = item.serialize()
+        db.session.remove()
+
+        invalid_bodies = [
+            {},
+            [],
+            "quantity=3",
+            {"discount": 5},
+            {"quantity": True},
+            {"quantity": 1000},
+            {"unit_price": True},
+            {"unit_price": -1},
+            {"unit_price": "NaN"},
+            {"unit_price": "Infinity"},
+            {"unit_price": "-Infinity"},
+            {"unit_price": "100000000"},
+            {"unit_price": "1.234"},
+            {"quantity": 3, "unit_price": -1},
+        ]
+        for body in invalid_bodies:
+            with self.subTest(body=body):
+                resp = self.client.put(
+                    f"/orders/{order_id}/items/{item_id}", json=body
+                )
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(Item.find(item_id).serialize(), before)
+                db.session.remove()
+                self.assertEqual(Item.find(item_id).serialize(), before)
 
     def test_update_item_rejects_immutable_fields(self):
         """It should not allow an Item identity or ownership field to be changed"""

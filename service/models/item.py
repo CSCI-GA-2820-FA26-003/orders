@@ -124,8 +124,8 @@ class Item(db.Model, PersistentBase):
             raise DataValidationError(f"Invalid Item: unknown fields: {fields}")
 
         try:
-            quantity = None
-            unit_price = None
+            quantity = self.quantity
+            unit_price = self.unit_price
             if "quantity" in data:
                 quantity = _to_int(data["quantity"], "quantity")
                 if not MIN_QUANTITY <= quantity <= MAX_QUANTITY:
@@ -139,10 +139,8 @@ class Item(db.Model, PersistentBase):
                 "Invalid Item: body of request contained bad or no data " + str(error)
             ) from error
 
-        if quantity is not None:
-            self.quantity = quantity
-        if unit_price is not None:
-            self.unit_price = unit_price
+        self.quantity = quantity
+        self.unit_price = unit_price
         return self
 
 
