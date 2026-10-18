@@ -705,3 +705,137 @@ class TestOrderService(TestCase):
         self.assertEqual(Order.find(order_id).serialize(), before)
         self.assertEqual(len(Order.all()), 1)
         self.assertEqual(len(Item.all()), 1)
+
+    ######################################################################
+    #  U P D A T E   A N   O R D E R   I T E M
+    ######################################################################
+
+    def _assert_update_item_not_found(self, resp, message):
+        """Checks the common JSON response for a missing order or item"""
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn(message, data["message"])
+
+    def test_update_order_item_recalculates_totals(self):
+        """It should update an Item and recalculate its line and order totals"""
+        order = OrderFactory()
+        item = ItemFactory(order=order, product_id=123, quantity=2, unit_price=Decimal("8.25"))
+        sibling = ItemFactory(order=order, quantity=1, unit_price=Decimal("4.25"))
+        order.create()
+        order_id, item_id, sibling_id = order.id, item.id, sibling.id
+        db.session.remove()
+
+        resp = self.client.put(f"/orders/{order_id}/items/{item_id}", json={"quantity": 5})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertEqual(
+            resp.get_json(),
+            {"id": item_id, "order_id": order_id, "product_id": 123,
+             "quantity": 5, "unit_price": 8.25, "line_total": 41.25},
+        )
+        db.session.remove()
+        found = Order.find(order_id)
+        self.assertEqual(found.subtotal, Decimal("45.50"))
+        self.assertEqual(found.items[1].id, sibling_id)
+
+    def test_update_order_item_price_and_quantity(self):
+        """It should update both mutable Item fields in one request"""
+        order = OrderFactory()
+        item = ItemFactory(order=order, quantity=2, unit_price=Decimal("8.25"))
+        order.create()
+
+        resp = self.client.put(
+            f"/orders/{order.id}/items/{item.id}",
+            json={"quantity": 3, "unit_price": "2.50"},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json()["line_total"], 7.5)
+        db.session.remove()
+        found = Item.find(item.id)
+        self.assertEqual(found.quantity, 3)
+        self.assertEqual(found.unit_price, Decimal("2.50"))
+
+    def test_update_missing_order_item(self):
+        """It should return 404 when the parent Order does not exist"""
+        resp = self.client.put("/orders/0/items/1", json={"quantity": 2})
+        self._assert_update_item_not_found(resp, "Order with id [0] was not found")
+
+    def test_update_missing_item(self):
+        """It should return 404 when the Item does not exist"""
+        order = OrderFactory()
+        order.create()
+
+        resp = self.client.put(f"/orders/{order.id}/items/0", json={"quantity": 2})
+        self._assert_update_item_not_found(
+            resp, f"Item with id [0] was not found in Order with id [{order.id}]"
+        )
+
+    def test_update_item_from_wrong_order(self):
+        """It should not update an Item through another Order's URL"""
+        orders = self._create_orders(2)
+        order, other_order = orders[0], orders[1]
+        item = other_order.items[0]
+        before = item.quantity
+
+        resp = self.client.put(f"/orders/{order.id}/items/{item.id}", json={"quantity": 9})
+        self._assert_update_item_not_found(
+            resp, f"Item with id [{item.id}] was not found in Order with id [{order.id}]"
+        )
+        db.session.remove()
+        self.assertEqual(Item.find(item.id).quantity, before)
+
+    def test_update_item_with_invalid_data_preserves_item(self):
+        """It should reject invalid mutable values without changing the Item"""
+        order = OrderFactory()
+        item = ItemFactory(order=order, quantity=2, unit_price=Decimal("8.25"))
+        order.create()
+
+        resp = self.client.put(f"/orders/{order.id}/items/{item.id}", json={"quantity": 0})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        db.session.remove()
+        found = Item.find(item.id)
+        self.assertEqual(found.quantity, 2)
+        self.assertEqual(found.unit_price, Decimal("8.25"))
+
+    def test_update_item_rejects_immutable_fields(self):
+        """It should not allow an Item identity or ownership field to be changed"""
+        order = OrderFactory()
+        item = ItemFactory(order=order, quantity=2)
+        order.create()
+        before = item.serialize()
+
+        resp = self.client.put(f"/orders/{order.id}/items/{item.id}", json={"order_id": 999})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        db.session.remove()
+        self.assertEqual(Item.find(item.id).serialize(), before)
+
+    def test_update_item_without_json(self):
+        """It should return 415 when the request is not JSON"""
+        order = OrderFactory()
+        item = ItemFactory(order=order)
+        order.create()
+
+        resp = self.client.put(
+            f"/orders/{order.id}/items/{item.id}",
+            data="quantity=2",
+            content_type="text/plain",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
+    def test_update_item_with_malformed_json(self):
+        """It should return 400 for malformed JSON"""
+        order = OrderFactory()
+        item = ItemFactory(order=order)
+        order.create()
+
+        resp = self.client.put(
+            f"/orders/{order.id}/items/{item.id}",
+            data='{"quantity":',
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
