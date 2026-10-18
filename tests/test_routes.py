@@ -203,6 +203,25 @@ class TestOrderService(TestCase):
         self.assertEqual([item["id"] for item in data["items"]], [item_id])
         self.assertEqual(Order.find(order_id).customer_id, 456)
 
+    def test_update_order_preserves_omitted_status(self):
+        """It should preserve an existing status when status is omitted"""
+        order = OrderFactory(customer_id=123, status=OrderStatus.SHIPPED)
+        order.create()
+        order_id = order.id
+        db.session.remove()
+
+        resp = self.client.put(
+            f"/orders/{order_id}",
+            json={"customer_id": 456},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json()["status"], "SHIPPED")
+        db.session.remove()
+        found = Order.find(order_id)
+        self.assertEqual(found.customer_id, 456)
+        self.assertEqual(found.status, OrderStatus.SHIPPED)
+
     def test_update_missing_order(self):
         """It should return a JSON 404 when the Order does not exist"""
         resp = self.client.put("/orders/0", json={"customer_id": 456})
