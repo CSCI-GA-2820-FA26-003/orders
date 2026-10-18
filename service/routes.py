@@ -23,7 +23,7 @@ and Delete Orders
 
 from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
-from service.models import Order, Item
+from service.models import Order, Item, OrderStatus
 from service.common import status  # HTTP Status Codes
 
 
@@ -153,3 +153,66 @@ def read_order_item(order_id, item_id):
 
     app.logger.info("Returning Item with id: %s from Order with id: %s", item_id, order_id)
     return jsonify(item.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# ADD AN ITEM TO AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>/items", methods=["POST"])
+def add_order_item(order_id):
+    """Adds an Item to an Order and recomputes the Order subtotal"""
+    app.logger.info("Request to add an Item to Order with id: %s", order_id)
+
+    if not request.is_json:
+        abort(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            description="Content-Type must be application/json",
+        )
+
+    order = Order.find(order_id)
+    if order is None:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Order with id [{order_id}] was not found",
+        )
+
+    if order.status != OrderStatus.NEW:
+        abort(
+            status.HTTP_409_CONFLICT,
+            description=(
+                f"Order with id [{order_id}] has status [{order.status.name}] "
+                "and cannot be modified"
+            ),
+        )
+
+    data = request.get_json()
+    if not isinstance(data, dict):
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            description="Invalid Item: body of request contained bad or no data",
+        )
+    for field in ("id", "order_id", "line_total"):
+        if field in data:
+            abort(
+                status.HTTP_400_BAD_REQUEST,
+                description=f"Invalid Item: '{field}' is read-only and must not be provided",
+            )
+
+    item = Item()
+    item.deserialize(data)
+    if item.product_id <= 0:
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            description="Invalid Item: product_id must be a positive integer",
+        )
+
+    # Single transaction: the append cascades the INSERT, and the Order
+    # subtotal (sum of line totals) is recomputed from the new item set
+    order.items.append(item)
+    order.update()
+
+    location_url = (
+        f"{url_for('list_orders', _external=True)}/{order.id}/items/{item.id}"
+    )
+    app.logger.info("Item with id: %s added to Order with id: %s", item.id, order.id)
+    return jsonify(item.serialize()), status.HTTP_201_CREATED, {"Location": location_url}

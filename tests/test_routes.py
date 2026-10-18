@@ -25,7 +25,7 @@ from decimal import Decimal
 from unittest import TestCase
 from wsgi import app
 from service.common import status
-from service.models import db, Order, Item
+from service.models import db, Order, Item, OrderStatus
 from tests.factories import OrderFactory, ItemFactory
 
 DATABASE_URI = os.getenv(
@@ -410,6 +410,142 @@ class TestOrderService(TestCase):
         db.session.remove()
         self.assertIsNotNone(Order.find(order_id))
         self.assertEqual(Order.find(order_id).items, [])
+
+    ######################################################################
+    #  A D D   O R D E R   I T E M S
+    ######################################################################
+
+    def _new_order_with_item(self):
+        """Create a modifiable Order with a known subtotal."""
+        order = OrderFactory(status=OrderStatus.NEW)
+        ItemFactory(order=order, quantity=2, unit_price=Decimal("8.25"))
+        order.create()
+        return order
+
+    def _assert_add_item_rejected(self, order, expected_status, **kwargs):
+        """Check an error response and verify no persisted data changed."""
+        order_id = order.id
+        before = order.serialize()
+        item_count = len(Item.all())
+        resp = self.client.post(f"/orders/{order_id}/items", **kwargs)
+        self.assertEqual(resp.status_code, expected_status)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertEqual(resp.get_json()["status"], expected_status)
+        error_names = {
+            status.HTTP_400_BAD_REQUEST: "Bad Request",
+            status.HTTP_409_CONFLICT: "Conflict",
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: "Unsupported media type",
+        }
+        self.assertEqual(resp.get_json()["error"], error_names[expected_status])
+        self.assertIsInstance(resp.get_json()["message"], str)
+        self.assertNotIn("Location", resp.headers)
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), before)
+        self.assertEqual(len(Item.all()), item_count)
+
+    def test_add_item_persistence_and_subtotals(self):
+        """It should return 201 and persist an Item with the correct Location and totals."""
+        for has_existing_item in (False, True):
+            with self.subTest(has_existing_item=has_existing_item):
+                order = OrderFactory(status=OrderStatus.NEW)
+                if has_existing_item:
+                    ItemFactory(order=order, quantity=2, unit_price=Decimal("8.25"))
+                order.create()
+                order_id = order.id
+                existing_ids = [item.id for item in order.items]
+                db.session.remove()
+                payload = {"product_id": 456, "quantity": 3, "unit_price": 4.25}
+                resp = self.client.post(f"/orders/{order_id}/items", json=payload)
+                self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+                self.assertEqual(resp.content_type, "application/json")
+                data = resp.get_json()
+                self.assertIsInstance(data["id"], int)
+                self.assertEqual(data, dict(payload, id=data["id"], order_id=order_id, line_total=12.75))
+                self.assertEqual(
+                    resp.headers["Location"],
+                    f"http://localhost/orders/{order_id}/items/{data['id']}",
+                )
+                db.session.remove()
+                self.assertEqual(Item.find(data["id"]).serialize(), data)
+                saved = Order.find(order_id)
+                self.assertEqual([item.id for item in saved.items], existing_ids + [data["id"]])
+                self.assertEqual(saved.status, OrderStatus.NEW)
+                self.assertEqual(saved.subtotal, Decimal("29.25" if has_existing_item else "12.75"))
+                listed = self.client.get("/orders").get_json()
+                returned = next(entry for entry in listed if entry["id"] == order_id)
+                self.assertEqual(returned, saved.serialize())
+
+    def test_add_item_invalid_fields(self):
+        """It should reject missing, read-only, out-of-range, and incorrectly typed fields."""
+        order = self._new_order_with_item()
+        valid = {"product_id": 456, "quantity": 2, "unit_price": 10.50}
+        invalid_payloads = []
+        for field in valid:
+            invalid_payloads.append({key: value for key, value in valid.items() if key != field})
+        for field in ("id", "order_id", "line_total"):
+            invalid_payloads.append(dict(valid, **{field: None}))
+        for field, values in (
+            ("product_id", [0, -1, True, "456", 1.5, None]),
+            ("quantity", [0, -1, 1000, True, "2", 1.5, None]),
+            ("unit_price", [-1, True, "invalid", "NaN", "Infinity", "100000000.00", "1.001", None]),
+        ):
+            for value in values:
+                invalid_payloads.append(dict(valid, **{field: value}))
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                self._assert_add_item_rejected(order, status.HTTP_400_BAD_REQUEST, json=payload)
+                order = Order.find(order.id)
+
+    def test_add_item_invalid_json_body(self):
+        """It should reject non-object, empty, and malformed JSON bodies."""
+        order = self._new_order_with_item()
+        for body in ('null', '[]', '"item"', '123', 'true', '', '{"product_id":'):
+            with self.subTest(body=body):
+                self._assert_add_item_rejected(
+                    order, status.HTTP_400_BAD_REQUEST, data=body, content_type="application/json"
+                )
+                order = Order.find(order.id)
+
+    def test_add_item_missing_order(self):
+        """It should return a JSON 404 and preserve existing Orders and Items."""
+        order = self._new_order_with_item()
+        before = order.serialize()
+        order_id = order.id
+        resp = self.client.post(
+            f"/orders/{order_id + 100000}/items",
+            json={"product_id": 456, "quantity": 2, "unit_price": 10.50},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertEqual(resp.get_json()["status"], status.HTTP_404_NOT_FOUND)
+        self.assertNotIn("Location", resp.headers)
+        db.session.remove()
+        self.assertEqual(Order.find(order_id).serialize(), before)
+        self.assertEqual(len(Item.all()), 1)
+
+    def test_add_item_all_non_new_statuses(self):
+        """It should return JSON 409 for every non-NEW Order status without changing data."""
+        for order_status in (OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CANCELLED):
+            with self.subTest(order_status=order_status):
+                order = self._new_order_with_item()
+                order.status = order_status
+                order.update()
+                self._assert_add_item_rejected(
+                    order, status.HTTP_409_CONFLICT,
+                    json={"product_id": 456, "quantity": 2, "unit_price": 10.50},
+                )
+
+    def test_add_item_unsupported_content_types(self):
+        """It should return JSON 415 for missing or unsupported Content-Type."""
+        order = self._new_order_with_item()
+        for content_type in (None, "text/plain", "application/x-www-form-urlencoded"):
+            with self.subTest(content_type=content_type):
+                self._assert_add_item_rejected(
+                    order, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                    data='{"product_id":456,"quantity":2,"unit_price":10.50}',
+                    content_type=content_type,
+                )
+                order = Order.find(order.id)
 
     ######################################################################
     #  R E A D   A N   O R D E R   I T E M
