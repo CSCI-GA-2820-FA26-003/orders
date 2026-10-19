@@ -20,6 +20,11 @@ Error Handlers Test Suite
 
 import logging
 from unittest import TestCase
+from unittest.mock import patch
+from datetime import datetime, timezone
+from werkzeug.exceptions import Unauthorized, Forbidden, TooManyRequests, ServiceUnavailable, BadGateway
+from werkzeug.datastructures import WWWAuthenticate
+from werkzeug.http import http_date
 from wsgi import app
 from service.common import status, error_handlers
 from service.models import DataValidationError
@@ -112,6 +117,7 @@ class TestErrorHandlers(TestCase):
         data = resp.get_json()
         self.assertEqual(data["status"], status.HTTP_405_METHOD_NOT_ALLOWED)
         self.assertEqual(data["error"]["code"], "method_not_allowed")
+        self.assertEqual(set(resp.headers["Allow"].split(", ")), {"GET", "HEAD", "OPTIONS"})
 
     def test_unsupported_media_type(self):
         """It should return 415 for an unsupported media type"""
@@ -143,3 +149,48 @@ class TestErrorHandlers(TestCase):
             "unavailable",
             "The service is temporarily unavailable.",
         )
+
+    def test_http_errors_preserve_status_and_headers(self):
+        """It should preserve unhandled HTTP statuses, authentication challenges, and retry headers."""
+        cases = [
+            (Unauthorized(www_authenticate=WWWAuthenticate("basic", {"realm": "orders"})),
+             "unauthorized", "WWW-Authenticate", 'Basic realm=orders'),
+            (Forbidden(), "forbidden", None, None),
+            (TooManyRequests(retry_after=30), "too_many_requests", "Retry-After", "30"),
+        ]
+        for error, error_code, header, value in cases:
+            with self.subTest(status=error.code):
+                with patch("service.routes.Order.find", side_effect=error):
+                    resp = self.client.delete("/orders/123", headers={"X-Request-ID": "http-error-test"})
+                self._assert_error((resp, resp.status_code), error.code, error_code, str(error))
+                self.assertEqual(resp.headers["X-Request-ID"], "http-error-test")
+                if header:
+                    self.assertEqual(resp.headers[header], value)
+
+    def test_service_unavailable_preserves_retry_after(self):
+        """It should preserve both Retry-After formats and hide internal 503 details."""
+        retry_date = datetime(2030, 1, 1, tzinfo=timezone.utc)
+        for retry_after, expected in ((30, "30"), (retry_date, http_date(retry_date))):
+            with self.subTest(retry_after=retry_after):
+                error = ServiceUnavailable(description="private database failure", retry_after=retry_after)
+                with patch("service.routes.Order.find", side_effect=error):
+                    resp = self.client.delete("/orders/123")
+                self._assert_error(
+                    (resp, resp.status_code), 503, "unavailable", "The service is temporarily unavailable."
+                )
+                self.assertEqual(resp.headers["Retry-After"], expected)
+                self.assertNotIn("private database failure", resp.get_data(as_text=True))
+
+    def test_unexpected_exception_returns_safe_500(self):
+        """It should return a safe JSON 500 for unexpected server exceptions."""
+        with patch("service.routes.Order.find", side_effect=RuntimeError("private database failure")):
+            resp = self.client.delete("/orders/123")
+        self._assert_error((resp, resp.status_code), 500, "internal_error", "An unexpected error occurred.")
+        self.assertNotIn("private database failure", resp.get_data(as_text=True))
+
+    def test_unhandled_server_http_error_is_safe(self):
+        """It should preserve other server HTTP statuses without exposing internal details."""
+        with patch("service.routes.Order.find", side_effect=BadGateway(description="private upstream details")):
+            resp = self.client.delete("/orders/123")
+        self._assert_error((resp, resp.status_code), 502, "internal_error", "An unexpected error occurred.")
+        self.assertNotIn("private upstream details", resp.get_data(as_text=True))
