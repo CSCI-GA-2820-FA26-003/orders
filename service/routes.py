@@ -71,6 +71,33 @@ def create_order():
 
 
 ######################################################################
+# UPDATE AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>", methods=["PUT"])
+def update_order(order_id):
+    """Updates an existing Order"""
+    app.logger.info("Request to update Order with id: %s", order_id)
+
+    if not request.is_json:
+        abort(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            description="Content-Type must be application/json",
+        )
+
+    order = Order.find(order_id)
+    if order is None:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Order with id [{order_id}] was not found",
+        )
+
+    order.deserialize(request.get_json())
+    order.update()
+    app.logger.info("Order with id: %s updated", order_id)
+    return jsonify(order.serialize()), status.HTTP_200_OK
+
+
+######################################################################
 # UPDATE AN ITEM FROM AN ORDER
 ######################################################################
 @app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["PUT"])
