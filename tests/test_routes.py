@@ -274,8 +274,8 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.content_type, "application/json")
         data = resp.get_json()
         self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
-        self.assertEqual(data["error"]["code"], "not_found")
-        self.assertIn("Order with id [0] was not found", data["error"]["message"])
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Order with id [0] was not found", data["message"])
         db.session.remove()
         self.assertIsNotNone(Order.find(order_id))
         self.assertEqual(Item.find(item_id).order_id, order_id)
@@ -294,8 +294,8 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.content_type, "application/json")
         data = resp.get_json()
         self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
-        self.assertEqual(data["error"]["code"], "not_found")
-        self.assertIn(f"Order with id [{order_id}] was not found", data["error"]["message"])
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn(f"Order with id [{order_id}] was not found", data["message"])
 
     ######################################################################
     #  D E L E T E   O R D E R   I T E M S
@@ -307,8 +307,8 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.content_type, "application/json")
         data = resp.get_json()
         self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
-        self.assertEqual(data["error"]["code"], "not_found")
-        self.assertIn(message, data["error"]["message"])
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn(message, data["message"])
 
     def test_delete_item_preserves_order_and_other_items(self):
         """It should delete only the requested Item and recalculate its Order's subtotal"""
@@ -557,8 +557,8 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.content_type, "application/json")
         data = resp.get_json()
         self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
-        self.assertEqual(data["error"]["code"], "not_found")
-        self.assertIn(message, data["error"]["message"])
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn(message, data["message"])
 
     def test_read_order_item(self):
         """It should return the requested Item's fields without changing any data"""

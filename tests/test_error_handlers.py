@@ -57,9 +57,8 @@ class TestErrorHandlers(TestCase):
         self,
         response,
         code: int,
-        error_code: str,
+        error_name: str,
         message: str,
-        details=None,
     ):
         """Checks the response tuple returned by an error handler"""
         body, status_code = response
@@ -67,14 +66,10 @@ class TestErrorHandlers(TestCase):
         self.assertIn("application/json", body.mimetype)
         data = body.get_json()
         self.assertEqual(data["status"], code)
-        self.assertEqual(data["error"]["code"], error_code)
-        self.assertEqual(data["error"]["message"], message)
-        self.assertIn("request_id", data["error"])
-        self.assertEqual(data["error"]["request_id"], response[0].headers["X-Request-ID"])
-        if details is None:
-            self.assertNotIn("details", data["error"])
-        else:
-            self.assertEqual(data["error"]["details"], details)
+        self.assertEqual(set(data), {"status", "error", "message"})
+        self.assertEqual(data["error"], error_name)
+        self.assertEqual(data["message"], message)
+        self.assertTrue(body.headers["X-Request-ID"])
 
     def test_data_validation_error(self):
         """It should return 400 for a DataValidationError"""
@@ -84,9 +79,8 @@ class TestErrorHandlers(TestCase):
         self._assert_error(
             response,
             status.HTTP_400_BAD_REQUEST,
-            "validation_error",
+            "Bad Request",
             "bad data",
-            details=[{"field": "request", "reason": "bad data"}],
         )
 
     def test_bad_request(self):
@@ -95,9 +89,8 @@ class TestErrorHandlers(TestCase):
         self._assert_error(
             response,
             status.HTTP_400_BAD_REQUEST,
-            "validation_error",
+            "Bad Request",
             "bad request",
-            details=[{"field": "request", "reason": "bad request"}],
         )
 
     def test_not_found(self):
@@ -107,8 +100,8 @@ class TestErrorHandlers(TestCase):
         self.assertIn("application/json", resp.content_type)
         data = resp.get_json()
         self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
-        self.assertEqual(data["error"]["code"], "not_found")
-        self.assertIn("request_id", data["error"])
+        self.assertEqual(data["error"], "Not Found")
+        self.assertTrue(resp.headers["X-Request-ID"])
 
     def test_method_not_allowed(self):
         """It should return 405 for a method that is not supported"""
@@ -116,7 +109,7 @@ class TestErrorHandlers(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         data = resp.get_json()
         self.assertEqual(data["status"], status.HTTP_405_METHOD_NOT_ALLOWED)
-        self.assertEqual(data["error"]["code"], "method_not_allowed")
+        self.assertEqual(data["error"], "Method not Allowed")
         self.assertEqual(set(resp.headers["Allow"].split(", ")), {"GET", "HEAD", "OPTIONS"})
 
     def test_unsupported_media_type(self):
@@ -125,7 +118,7 @@ class TestErrorHandlers(TestCase):
         self._assert_error(
             response,
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            "unsupported_media",
+            "Unsupported media type",
             "bad media type",
         )
 
@@ -135,7 +128,7 @@ class TestErrorHandlers(TestCase):
         self._assert_error(
             response,
             status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "internal_error",
+            "Internal Server Error",
             "An unexpected error occurred.",
         )
         self.assertNotIn("internal details", response[0].get_data(as_text=True))
@@ -146,7 +139,7 @@ class TestErrorHandlers(TestCase):
         self._assert_error(
             response,
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            "unavailable",
+            "Service Unavailable",
             "The service is temporarily unavailable.",
         )
 
@@ -154,15 +147,15 @@ class TestErrorHandlers(TestCase):
         """It should preserve unhandled HTTP statuses, authentication challenges, and retry headers."""
         cases = [
             (Unauthorized(www_authenticate=WWWAuthenticate("basic", {"realm": "orders"})),
-             "unauthorized", "WWW-Authenticate", 'Basic realm=orders'),
-            (Forbidden(), "forbidden", None, None),
-            (TooManyRequests(retry_after=30), "too_many_requests", "Retry-After", "30"),
+             "Unauthorized", "WWW-Authenticate", 'Basic realm=orders'),
+            (Forbidden(), "Forbidden", None, None),
+            (TooManyRequests(retry_after=30), "Too Many Requests", "Retry-After", "30"),
         ]
-        for error, error_code, header, value in cases:
+        for error, error_name, header, value in cases:
             with self.subTest(status=error.code):
                 with patch("service.routes.Order.find", side_effect=error):
                     resp = self.client.delete("/orders/123", headers={"X-Request-ID": "http-error-test"})
-                self._assert_error((resp, resp.status_code), error.code, error_code, str(error))
+                self._assert_error((resp, resp.status_code), error.code, error_name, str(error))
                 self.assertEqual(resp.headers["X-Request-ID"], "http-error-test")
                 if header:
                     self.assertEqual(resp.headers[header], value)
@@ -176,7 +169,7 @@ class TestErrorHandlers(TestCase):
                 with patch("service.routes.Order.find", side_effect=error):
                     resp = self.client.delete("/orders/123")
                 self._assert_error(
-                    (resp, resp.status_code), 503, "unavailable", "The service is temporarily unavailable."
+                    (resp, resp.status_code), 503, "Service Unavailable", "The service is temporarily unavailable."
                 )
                 self.assertEqual(resp.headers["Retry-After"], expected)
                 self.assertNotIn("private database failure", resp.get_data(as_text=True))
@@ -185,12 +178,12 @@ class TestErrorHandlers(TestCase):
         """It should return a safe JSON 500 for unexpected server exceptions."""
         with patch("service.routes.Order.find", side_effect=RuntimeError("private database failure")):
             resp = self.client.delete("/orders/123")
-        self._assert_error((resp, resp.status_code), 500, "internal_error", "An unexpected error occurred.")
+        self._assert_error((resp, resp.status_code), 500, "Internal Server Error", "An unexpected error occurred.")
         self.assertNotIn("private database failure", resp.get_data(as_text=True))
 
     def test_unhandled_server_http_error_is_safe(self):
         """It should preserve other server HTTP statuses without exposing internal details."""
         with patch("service.routes.Order.find", side_effect=BadGateway(description="private upstream details")):
             resp = self.client.delete("/orders/123")
-        self._assert_error((resp, resp.status_code), 502, "internal_error", "An unexpected error occurred.")
+        self._assert_error((resp, resp.status_code), 502, "Bad Gateway", "An unexpected error occurred.")
         self.assertNotIn("private upstream details", resp.get_data(as_text=True))

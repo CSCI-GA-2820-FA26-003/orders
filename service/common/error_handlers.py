@@ -30,19 +30,14 @@ def _request_id():
     return getattr(g, "request_id", request.headers.get("X-Request-ID") or str(uuid.uuid4()))
 
 
-def _error_response(error_code, message, status_code, details=None, error=None):
+def _error_response(error_name, message, status_code, error=None):
     """Build a consistent JSON error payload for the client."""
     request_id = _request_id()
     payload = {
         "status": status_code,
-        "error": {
-            "code": error_code,
-            "message": message,
-            "request_id": request_id,
-        },
+        "error": error_name,
+        "message": message,
     }
-    if details is not None:
-        payload["error"]["details"] = details
     if isinstance(error, HTTPException):
         response = error.get_response()
         response.set_data(jsonify(payload).get_data())
@@ -61,12 +56,10 @@ def _error_response(error_code, message, status_code, details=None, error=None):
 def request_validation_error(error):
     """Handles Value Errors from bad data"""
     app.logger.warning(str(error))
-    details = [{"field": "request", "reason": str(error)}]
     return _error_response(
-        "validation_error",
+        "Bad Request",
         str(error),
         status.HTTP_400_BAD_REQUEST,
-        details=details,
         error=error,
     )
 
@@ -77,10 +70,9 @@ def bad_request(error):
     message = str(error)
     app.logger.warning(message)
     return _error_response(
-        "validation_error",
+        "Bad Request",
         message,
         status.HTTP_400_BAD_REQUEST,
-        details=[{"field": "request", "reason": message}],
         error=error,
     )
 
@@ -91,7 +83,7 @@ def not_found(error):
     message = str(error)
     app.logger.warning(message)
     return _error_response(
-        "not_found",
+        "Not Found",
         message,
         status.HTTP_404_NOT_FOUND,
         error=error,
@@ -104,7 +96,7 @@ def method_not_supported(error):
     message = str(error)
     app.logger.warning(message)
     return _error_response(
-        "method_not_allowed",
+        "Method not Allowed",
         message,
         status.HTTP_405_METHOD_NOT_ALLOWED,
         error=error,
@@ -117,21 +109,10 @@ def conflict(error):
     message = str(error)
     app.logger.warning(message)
     return _error_response(
-        "conflict",
+        "Conflict",
         message,
         status.HTTP_409_CONFLICT,
         error=error,
-    )
-
-
-@app.errorhandler(status.HTTP_409_CONFLICT)
-def conflict(error):
-    """Handles conflicts with 409_CONFLICT"""
-    message = str(error)
-    app.logger.warning(message)
-    return (
-        jsonify(status=status.HTTP_409_CONFLICT, error="Conflict", message=message),
-        status.HTTP_409_CONFLICT,
     )
 
 
@@ -141,7 +122,7 @@ def mediatype_not_supported(error):
     message = str(error)
     app.logger.warning(message)
     return _error_response(
-        "unsupported_media",
+        "Unsupported media type",
         message,
         status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
         error=error,
@@ -153,7 +134,7 @@ def internal_server_error(error):
     """Handles unexpected server error with 500_SERVER_ERROR"""
     app.logger.exception("Unhandled server error")
     return _error_response(
-        "internal_error",
+        "Internal Server Error",
         "An unexpected error occurred.",
         status.HTTP_500_INTERNAL_SERVER_ERROR,
         error=error,
@@ -165,7 +146,7 @@ def service_unavailable(error):
     """Handles service unavailable responses with 503_SERVICE_UNAVAILABLE."""
     app.logger.warning(str(error))
     return _error_response(
-        "unavailable",
+        "Service Unavailable",
         "The service is temporarily unavailable.",
         status.HTTP_503_SERVICE_UNAVAILABLE,
         error=error,
@@ -177,12 +158,10 @@ def http_exception(error):
     """Preserve HTTP status and headers while returning the common JSON envelope."""
     app.logger.warning(str(error))
     if error.code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
-        error_code = "internal_error"
         message = "An unexpected error occurred."
     else:
-        error_code = error.name.lower().replace(" ", "_")
         message = str(error)
-    return _error_response(error_code, message, error.code, error=error)
+    return _error_response(error.name, message, error.code, error=error)
 
 
 @app.errorhandler(Exception)
@@ -190,7 +169,7 @@ def generic_exception_handler(error):
     """Ensure all unhandled exceptions return a safe JSON payload."""
     app.logger.exception("Unhandled exception")
     return _error_response(
-        "internal_error",
+        "Internal Server Error",
         "An unexpected error occurred.",
         status.HTTP_500_INTERNAL_SERVER_ERROR,
         error=error,
