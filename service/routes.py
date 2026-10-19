@@ -98,6 +98,40 @@ def update_order(order_id):
 
 
 ######################################################################
+# UPDATE AN ITEM FROM AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["PUT"])
+def update_order_item(order_id, item_id):
+    """Updates the quantity and/or unit price of an Item in an Order"""
+    app.logger.info("Request to update Item with id: %s in Order with id: %s", item_id, order_id)
+
+    if not request.is_json:
+        abort(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            description="Content-Type must be application/json",
+        )
+
+    order = Order.find(order_id)
+    if order is None:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Order with id [{order_id}] was not found",
+        )
+
+    item = Item.find(item_id)
+    if item is None or item.order_id != order_id:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Item with id [{item_id}] was not found in Order with id [{order_id}]",
+        )
+
+    item.update_fields(request.get_json())
+    item.update()
+    app.logger.info("Item with id: %s updated in Order with id: %s", item_id, order_id)
+    return jsonify(item.serialize()), status.HTTP_200_OK
+
+
+######################################################################
 # LIST ALL ORDERS
 ######################################################################
 @app.route("/orders", methods=["GET"])
