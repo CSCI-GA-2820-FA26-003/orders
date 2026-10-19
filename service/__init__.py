@@ -19,7 +19,8 @@ This module creates and configures the Flask app and sets up the logging
 and SQL database
 """
 import sys
-from flask import Flask
+import uuid
+from flask import Flask, g, request
 from service import config
 from service.common import log_handlers
 
@@ -32,6 +33,19 @@ def create_app():
     # Create Flask application
     app = Flask(__name__)
     app.config.from_object(config)
+
+    @app.before_request
+    def _attach_request_id():
+        """Ensure each request has a traceable request ID."""
+        g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+
+    @app.after_request
+    def _add_request_id_header(response):
+        """Echo the request ID back to the client on every response."""
+        response.headers["X-Request-ID"] = getattr(
+            g, "request_id", request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        )
+        return response
 
     # Initialize Plugins
     # pylint: disable=import-outside-toplevel
