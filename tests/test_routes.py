@@ -223,6 +223,66 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.get_json(), [])
 
     ######################################################################
+    #  R E A D   A N   O R D E R
+    ######################################################################
+
+    def test_read_an_order(self):
+        """It should Read an Order with all of its Items"""
+        order = OrderFactory(customer_id=42)
+        ItemFactory(order=order, product_id=100, quantity=2, unit_price=Decimal("10.50"))
+        ItemFactory(order=order, product_id=200, quantity=1, unit_price=Decimal("3.25"))
+        order.create()
+        order_id = order.id
+        db.session.remove()
+
+        resp = self.client.get(f"/orders/{order_id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertEqual(data["id"], order_id)
+        self.assertEqual(data["customer_id"], 42)
+        self.assertEqual(data["subtotal"], 24.25)
+        items = sorted(data["items"], key=lambda item: item["product_id"])
+        self.assertEqual(len(items), 2)
+        self.assertEqual(
+            [(item["product_id"], item["quantity"], item["unit_price"]) for item in items],
+            [(100, 2, 10.5), (200, 1, 3.25)],
+        )
+        for item in items:
+            self.assertEqual(item["order_id"], order_id)
+
+    def test_read_an_empty_order(self):
+        """It should Read an Order that has no Items"""
+        order = OrderFactory()
+        order.create()
+
+        resp = self.client.get(f"/orders/{order.id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["id"], order.id)
+        self.assertEqual(data["items"], [])
+
+    def test_read_order_not_found(self):
+        """It should return a JSON 404 when the Order does not exist"""
+        resp = self.client.get("/orders/0")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Order with id [0] was not found", data["message"])
+
+    def test_create_order_location_can_be_read(self):
+        """It should Read the new Order from the Location header after creating it"""
+        resp = self.client.post("/orders", json={"customer_id": 7})
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        new_order = resp.get_json()
+
+        resp = self.client.get(resp.headers["Location"])
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json(), new_order)
+
+    ######################################################################
     #  D E L E T E   O R D E R S
     ######################################################################
 
