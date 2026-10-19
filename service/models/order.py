@@ -84,7 +84,8 @@ class Order(db.Model, PersistentBase):
         """
         try:
             customer_id = _to_int(data["customer_id"], "customer_id")
-            status = OrderStatus[data.get("status", OrderStatus.NEW.name)]
+            current_status = self.status.name if self.status else OrderStatus.NEW.name
+            status = OrderStatus[data.get("status", current_status)]
             # handle inner list of items
             new_items = None
             if "items" in data:

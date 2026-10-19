@@ -177,6 +177,90 @@ class TestOrderService(TestCase):
         self.assertEqual(Order.all(), [])
 
     ######################################################################
+    #  U P D A T E   A N   O R D E R
+    ######################################################################
+
+    def test_update_order(self):
+        """It should update an existing Order and return the new representation"""
+        order = OrderFactory(customer_id=123)
+        ItemFactory(order=order)
+        order.create()
+        order_id = order.id
+        item_id = order.items[0].id
+        db.session.remove()
+
+        resp = self.client.put(
+            f"/orders/{order_id}",
+            json={"customer_id": 456, "status": "SHIPPED"},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertEqual(data["id"], order_id)
+        self.assertEqual(data["customer_id"], 456)
+        self.assertEqual(data["status"], "SHIPPED")
+        self.assertEqual([item["id"] for item in data["items"]], [item_id])
+        self.assertEqual(Order.find(order_id).customer_id, 456)
+
+    def test_update_order_preserves_omitted_status(self):
+        """It should preserve an existing status when status is omitted"""
+        order = OrderFactory(customer_id=123, status=OrderStatus.SHIPPED)
+        order.create()
+        order_id = order.id
+        db.session.remove()
+
+        resp = self.client.put(
+            f"/orders/{order_id}",
+            json={"customer_id": 456},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json()["status"], "SHIPPED")
+        db.session.remove()
+        found = Order.find(order_id)
+        self.assertEqual(found.customer_id, 456)
+        self.assertEqual(found.status, OrderStatus.SHIPPED)
+
+    def test_update_missing_order(self):
+        """It should return a JSON 404 when the Order does not exist"""
+        resp = self.client.put("/orders/0", json={"customer_id": 456})
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.content_type, "application/json")
+        data = resp.get_json()
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Order with id [0] was not found", data["message"])
+
+    def test_update_order_with_invalid_data(self):
+        """It should return a JSON 400 for invalid order data"""
+        order = OrderFactory()
+        order.create()
+
+        resp = self.client.put(
+            f"/orders/{order.id}", json={"customer_id": "invalid"}
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertEqual(Order.find(order.id).customer_id, order.customer_id)
+
+    def test_update_order_without_json(self):
+        """It should return a JSON 415 when the request is not JSON"""
+        order = OrderFactory()
+        order.create()
+
+        resp = self.client.put(
+            f"/orders/{order.id}",
+            data="customer_id=456",
+            content_type="text/plain",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+        self.assertEqual(resp.content_type, "application/json")
+
+    ######################################################################
     #  L I S T   O R D E R S
     ######################################################################
 
