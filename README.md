@@ -103,6 +103,19 @@ This follows Issue #2's explicit 404 requirement for a missing order. REST
 lecture slides 42 and 44 suggest 204 for missing or repeated deletions; the
 current Story takes precedence.
 
+## List all items in an order
+
+```bash
+curl -i http://localhost:8080/orders/123/items
+```
+
+`GET /orders/{order_id}/items` returns **200 OK** with
+`Content-Type: application/json` and an array of all Items belonging to that order.
+Each Item includes `id`, `order_id`, `product_id`, `quantity`, `unit_price`, and
+computed `line_total`. Existing orders with no Items return `[]`. Missing orders
+return **404 Not Found** using the common JSON error format. Listing Items does
+not change any data or include Items belonging to other orders.
+
 ## Read an item from an order
 
 ```bash
