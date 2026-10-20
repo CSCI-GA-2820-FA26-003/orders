@@ -22,6 +22,11 @@ for the models and the routes.
 With the service running in the development container via `honcho start`, the API
 is available at `http://localhost:8080`. All request and response bodies are JSON.
 
+## Running the Tests
+       flask db-create   # recreate the tables
+       make test         # pytest with coverage (>= 95%)
+       make lint         # flake8 and pylint
+
 ## Data Model
 
 ### Order
