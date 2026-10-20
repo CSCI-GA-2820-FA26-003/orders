@@ -66,8 +66,27 @@ def create_order():
     order.deserialize(request.get_json())
     order.create()
 
-    location_url = f'{url_for("list_orders", _external=True)}/{order.id}'
+    location_url = url_for("get_orders", order_id=order.id, _external=True)
     return jsonify(order.serialize()), status.HTTP_201_CREATED, {"Location": location_url}
+
+
+######################################################################
+# READ AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>", methods=["GET"])
+def get_orders(order_id):
+    """Returns a single Order with all of its Items"""
+    app.logger.info("Request for Order with id: %s", order_id)
+
+    order = Order.find(order_id)
+    if order is None:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Order with id [{order_id}] was not found",
+        )
+
+    app.logger.info("Returning Order with id: %s", order_id)
+    return jsonify(order.serialize()), status.HTTP_200_OK
 
 
 ######################################################################
