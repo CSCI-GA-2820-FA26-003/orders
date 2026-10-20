@@ -195,12 +195,6 @@ curl -i -X DELETE http://localhost:8080/orders/123
 - **204 No Content:** The Order and all associated Items are deleted in the same
   database transaction. The response body is empty. Empty Orders can also be
   deleted. Other Orders and their Items are unaffected.
-- **404 Not Found:** The id does not exist, including a second deletion of the
-  same Order.
-
-This follows Issue #2's explicit 404 requirement for a missing Order. REST
-lecture slides 42 and 44 suggest 204 for missing or repeated deletions; the
-current Story takes precedence.
 
 ### Add an item to an order
 
