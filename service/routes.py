@@ -174,10 +174,9 @@ def delete_order(order_id):
     app.logger.info("Request to delete Order with id: %s", order_id)
     order = Order.find(order_id)
     if order is None:
-        abort(
-            status.HTTP_404_NOT_FOUND,
-            description=f"Order with id [{order_id}] was not found",
-        )
+        # DELETE is idempotent: if the Order is already gone there is nothing to do
+        app.logger.info("Order with id: %s not found, nothing to delete", order_id)
+        return "", status.HTTP_204_NO_CONTENT
 
     order.delete()
     app.logger.info("Order with id: %s deleted", order_id)
@@ -191,19 +190,11 @@ def delete_order(order_id):
 def delete_order_item(order_id, item_id):
     """Deletes an Item belonging to the specified Order, returning no content"""
     app.logger.info("Request to delete Item with id: %s from Order with id: %s", item_id, order_id)
-    order = Order.find(order_id)
-    if order is None:
-        abort(
-            status.HTTP_404_NOT_FOUND,
-            description=f"Order with id [{order_id}] was not found",
-        )
-
     item = Item.find(item_id)
     if item is None or item.order_id != order_id:
-        abort(
-            status.HTTP_404_NOT_FOUND,
-            description=f"Item with id [{item_id}] was not found in Order with id [{order_id}]",
-        )
+        # DELETE is idempotent: if the Item is not in this Order there is nothing to do
+        app.logger.info("Item with id: %s not found in Order with id: %s, nothing to delete", item_id, order_id)
+        return "", status.HTTP_204_NO_CONTENT
 
     item.delete()
     app.logger.info("Item with id: %s deleted from Order with id: %s", item_id, order_id)
