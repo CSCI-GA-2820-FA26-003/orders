@@ -99,6 +99,50 @@ class Item(db.Model, PersistentBase):
         self.order_id = order_id
         return self
 
+    def update_fields(self, data: dict):
+        """Updates the mutable fields of an existing Item.
+
+        An item update is intentionally partial: callers may change only the
+        quantity and/or unit price. The identity and ownership fields are
+        immutable and must not be supplied as part of an update.
+        """
+        if not isinstance(data, dict):
+            raise DataValidationError("Invalid Item: request body must be a JSON object")
+        if not data:
+            raise DataValidationError("Invalid Item: at least one field must be supplied")
+
+        immutable_fields = {"id", "order_id", "product_id"}
+        invalid_fields = immutable_fields.intersection(data)
+        if invalid_fields:
+            fields = ", ".join(sorted(invalid_fields))
+            raise DataValidationError(f"Invalid Item: fields cannot be updated: {fields}")
+
+        mutable_fields = {"quantity", "unit_price"}
+        unknown_fields = set(data) - mutable_fields
+        if unknown_fields:
+            fields = ", ".join(sorted(unknown_fields))
+            raise DataValidationError(f"Invalid Item: unknown fields: {fields}")
+
+        try:
+            quantity = self.quantity
+            unit_price = self.unit_price
+            if "quantity" in data:
+                quantity = _to_int(data["quantity"], "quantity")
+                if not MIN_QUANTITY <= quantity <= MAX_QUANTITY:
+                    raise DataValidationError(
+                        f"Invalid Item: quantity must be between {MIN_QUANTITY} and {MAX_QUANTITY}"
+                    )
+            if "unit_price" in data:
+                unit_price = _to_price(data["unit_price"])
+        except TypeError as error:
+            raise DataValidationError(
+                "Invalid Item: body of request contained bad or no data " + str(error)
+            ) from error
+
+        self.quantity = quantity
+        self.unit_price = unit_price
+        return self
+
 
 ######################################################################
 #  H E L P E R   F U N C T I O N S
