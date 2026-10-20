@@ -42,7 +42,7 @@ is available at `http://localhost:8080`. All request and response bodies are JSO
 | ------------ | ------- | ----------------------------------------------------------- |
 | `id`         | integer | Read-only, assigned by the service                          |
 | `order_id`   | integer | Read-only, the Order this Item belongs to                   |
-| `product_id` | integer | **Required**, must be a positive integer                    |
+| `product_id` | integer | **Required**; must be positive for `POST /orders/{order_id}/items` |
 | `quantity`   | integer | **Required**, between 1 and 999                             |
 | `unit_price` | number  | **Required**, between 0 and 99999999.99, at most 2 decimals |
 | `line_total` | number  | Read-only, computed as `quantity × unit_price`              |
