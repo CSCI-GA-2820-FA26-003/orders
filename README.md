@@ -195,6 +195,8 @@ curl -i -X DELETE http://localhost:8080/orders/123
 - **204 No Content:** The Order and all associated Items are deleted in the same
   database transaction. The response body is empty. Empty Orders can also be
   deleted. Other Orders and their Items are unaffected.
+- DELETE is idempotent: if the Order does not exist (for example, it was already
+  deleted), the service also returns **204 No Content** and nothing is changed.
 
 ### Add an item to an order
 
@@ -273,8 +275,9 @@ curl -i -X DELETE http://localhost:8080/orders/123/items/456
   and the response body is empty. The Order, its remaining Items, and other Orders
   are preserved. The Order's computed `subtotal` reflects the remaining Items.
   Deleting the last Item leaves an empty Order with a subtotal of zero.
-- **404 Not Found:** The Order or Item does not exist, or the Item belongs to a
-  different Order. Repeated deletion also returns 404.
+- DELETE is idempotent: if the Order or Item does not exist, or the Item belongs
+  to a different Order, the service also returns **204 No Content** and nothing is
+  changed. Repeated deletion also returns 204.
 
 ## Contents
 
