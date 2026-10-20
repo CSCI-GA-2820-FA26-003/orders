@@ -91,7 +91,7 @@ not exposed.
 
 Every response, including errors, carries an `X-Request-ID` header. If the client
 sends an `X-Request-ID` header it is echoed back; otherwise the service generates a
-UUID. Use it to correlate a request with the service logs.
+UUID.
 
 ### Service information
 
