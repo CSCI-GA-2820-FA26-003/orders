@@ -17,15 +17,174 @@ The `/service` folder contains the `models` package with the `Order` and `Item`
 models, and `routes.py` with the REST API. The `/tests` folder contains test suites
 for the models and the routes.
 
-## Running the Service
+## Prerequisites
 
-With the service running in the development container via `honcho start`, the API
-is available at `http://localhost:8080`. All request and response bodies are JSON.
+The development environment runs entirely inside a Docker container, so you only
+need the following installed on your computer:
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine on Linux)
+- [Visual Studio Code](https://code.visualstudio.com/)
+- The [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+  extension for VSCode
+
+## Initial Setup
+
+1. Clone the repository and open it in VSCode:
+
+   ```bash
+   git clone https://github.com/CSCI-GA-2820-FA26-003/orders.git
+   cd orders
+   code .
+   ```
+
+2. Make sure Docker is running.
+3. When VSCode prompts you, click **Reopen in Container**. Otherwise open the Command
+   Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run
+   **Dev Containers: Reopen in Container**.
+
+The first build takes a few minutes. VSCode uses `.devcontainer/docker-compose.yml`
+to start two containers: `app`, where you develop and run the service, and
+`postgres`, a PostgreSQL 15 database. All of the commands below are run in the
+VSCode terminal inside the `app` container.
+
+## Dependencies
+
+You do not need to install dependencies yourself. When the dev container image is
+built, the `.devcontainer/Dockerfile` runs `pipenv install --system --dev`, which
+installs every package in `Pipfile.lock` (Flask, SQLAlchemy, psycopg, pytest,
+coverage, flake8, pylint, and so on).
+
+If you change the `Pipfile`, or a package is missing, install the dependencies
+manually from inside the container:
+
+```bash
+make install    # runs: sudo pipenv install --system --dev
+```
+
+To pick up dependency changes for everyone, rebuild the container with
+**Dev Containers: Rebuild Container**.
+
+## Database Configuration
+
+The service reads its database connection from the `DATABASE_URI` environment
+variable. The dev container sets it in `.devcontainer/docker-compose.yml`:
+
+```text
+DATABASE_URI=postgresql+psycopg://postgres:pgs3cr3t@postgres:5432/postgres
+```
+
+| Setting  | Value                                                |
+| -------- | ---------------------------------------------------- |
+| Driver   | `postgresql+psycopg` (SQLAlchemy with psycopg 3)     |
+| Host     | `postgres` (the database container's hostname)       |
+| Port     | `5432`                                               |
+| User     | `postgres`                                           |
+| Password | `pgs3cr3t`                                           |
+| Database | `postgres`                                           |
+
+If `DATABASE_URI` is not set, `service/config.py` falls back to
+`postgresql+psycopg://postgres:postgres@localhost:5432/postgres`. The database data
+is kept in the `postgres` Docker volume, so it survives container restarts. To reach
+the database from your own computer, uncomment the `ports` section of the `postgres`
+service in `docker-compose.yml` and rebuild the container.
+
+**Database initialization:** you do not need to create the tables by hand. When the
+service starts, it calls `db.create_all()`, which creates any tables that do not
+exist yet and leaves existing tables and data alone.
+
+## Starting the Service
+
+1. Open a terminal in VSCode (inside the dev container).
+2. Start the service with either command:
+
+   ```bash
+   make run        # runs honcho start
+   # or
+   honcho start
+   ```
+
+   Honcho runs the `web` process in the `Procfile`, which starts gunicorn on
+   `0.0.0.0:$PORT`. `PORT` is set to `8080` in the dev container.
+3. The service is available at **<http://localhost:8080>**. Port 8080 is forwarded
+   from the container, so you can open it in your browser or call it from your
+   computer. Check that it is up with:
+
+   ```bash
+   curl -i http://localhost:8080/
+   ```
+
+4. Press `Ctrl+C` to stop the service.
+
+All request and response bodies are JSON.
 
 ## Running the Tests
-       flask db-create   # recreate the tables
-       make test         # pytest with coverage (>= 95%)
-       make lint         # flake8 and pylint
+
+> **Warning:** the tests delete every Order and Item in the database they connect
+> to before each test case. They use the `DATABASE_URI` environment variable, which
+> in the dev container points at the development database. Running `make test`
+> without changing it **will erase your development data**.
+
+### Configure a separate test database
+
+1. Create a `testdb` database on the `postgres` server (only needed once, since it
+   is kept in the Docker volume):
+
+   ```bash
+   python -c "import psycopg; psycopg.connect('postgresql://postgres:pgs3cr3t@postgres:5432/postgres', autocommit=True).execute('CREATE DATABASE testdb')"
+   ```
+
+2. Point `DATABASE_URI` at the test database for your test runs:
+
+   ```bash
+   export DATABASE_URI=postgresql+psycopg://postgres:pgs3cr3t@postgres:5432/testdb
+   ```
+
+   This only lasts for the current terminal. Use a separate terminal for
+   `make run` if you want the service to keep using the development database.
+
+3. Run the tests and the linter:
+
+   ```bash
+   make test       # pytest with coverage (>= 95%)
+   make lint       # flake8 and pylint
+   ```
+
+   You can also set the variable for a single run:
+   `DATABASE_URI=postgresql+psycopg://postgres:pgs3cr3t@postgres:5432/testdb make test`.
+
+The tables are created automatically when the tests load the app, so the empty
+`testdb` database is all you need.
+
+### Resetting the database
+
+`flask db-create` **drops all tables and recreates them**, which deletes all of
+their data. It acts on the database in `DATABASE_URI`. You do **not** need to run it
+before every test run, since the tests clean up their own data. Use it only when
+the tables are out of date, for example after a model change adds or renames a
+column (`db.create_all()` never changes tables that already exist):
+
+```bash
+flask db-create
+```
+
+### Coverage reports
+
+`make test` measures coverage of the `service` package and fails if total coverage
+is below **95%** (`--cov-fail-under=95`). A summary with missing line numbers is
+printed in the terminal.
+
+To see exactly which lines are not covered, generate an HTML report after running
+the tests:
+
+```bash
+coverage html
+```
+
+The report is written to `htmlcov/` (ignored by git). The project folder is shared
+between the container and your computer, so open `htmlcov/index.html` from your
+local clone in a browser (or right-click it in the VSCode Explorer and choose
+**Reveal in File Explorer** / **Reveal in Finder**). Click a file to see its
+uncovered lines highlighted.
 
 ## Data Model
 
