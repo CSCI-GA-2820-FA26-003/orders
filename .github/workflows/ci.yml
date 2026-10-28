@@ -52,3 +52,30 @@ jobs:
           files: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+
+  kubernetes:
+    name: Kubernetes acceptance
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned k3d
+        run: |
+          curl --fail --silent --show-error --location \
+            https://github.com/k3d-io/k3d/releases/download/v5.9.0/k3d-linux-amd64 \
+            --output /tmp/orders-k3d
+          echo '06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0  /tmp/orders-k3d' | sha256sum --check
+          sudo install -m 0755 /tmp/orders-k3d /usr/local/bin/k3d
+      - name: Verify fresh cluster, API and PostgreSQL persistence
+        run: bash scripts/verify-kubernetes.sh
+      - name: Save Kubernetes acceptance reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubernetes-acceptance
+          if-no-files-found: warn
+          path: |
+            .test-tmp/kubernetes/verification.log
+            .test-tmp/kubernetes/resources.txt
+            .test-tmp/kubernetes/available-replicas.txt

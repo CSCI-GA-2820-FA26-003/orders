@@ -21,7 +21,7 @@ Total: 21 SP. Preserve the three existing story identities. All stories remain o
 
 ## Implementation checkpoint
 
-Branch: feature/sprint2-foundation. Local verification is recorded below; remote push, PR creation and GitHub CI/Codecov verification remain pending.
+Branch: feature/sprint2-foundation. Published as [PR #45](https://github.com/CSCI-GA-2820-FA26-003/orders/pull/45). GitHub Actions tests/lint and the Codecov PR patch check passed on the published application source; details are recorded below.
 
 - Status filtering now uses Order.find_by_status. No query returns all orders. Exact enum names NEW, SHIPPED, DELIVERED and CANCELLED are supported; invalid/empty/repeated status or unsupported query keys return JSON 400.
 - Cancellation persists NEW to CANCELLED, returns 404/409 JSON errors, preserves items and treats repeated cancellation as a no-op.
@@ -50,6 +50,9 @@ Branch: feature/sprint2-foundation. Local verification is recorded below; remote
 | Image substitution / repeated deployment | Passed | Requested image deployed successfully; repeated make deploy reused the same database Secret and retained the saved order/item values |
 | Deployment / K3s runner syntax | Passed | Tree-sitter Bash parser; native Bash execution unavailable in this assistant session |
 | PowerShell launchers / Python syntax / Git whitespace | Passed | Current scripts and modified source |
+| GitHub Actions | Passed | Run 40730224809: 142 tests, coverage 99.02%, flake8 passed, pylint 10.00/10, Codecov upload succeeded |
+| Codecov PR report | Passed | PR #45 codecov/patch: 100.00% changed-line coverage against the 95.00% target; Codecov bot report appeared |
+| Fresh Kubernetes CI acceptance | Configured | Subsequent CI runs execute the same make/Ingress/Pod/PVC acceptance script on a fresh GitHub runner and retain allowlisted reports |
 
 Saved external run evidence:
 
@@ -75,15 +78,15 @@ The K3s runner uses unique cluster/registry names, free local ports and a privat
 
 The first K3s run (.test-tmp/kubernetes-bc80a18b915d/) passed cluster/build/push and PostgreSQL startup, then failed on the extra registry-hostname prefix. The resumed run (.test-tmp/kubernetes-156d948e87ca/) corrected registry aliases and passed deployment, all ingress/API checks, PostgreSQL Pod/PVC persistence and repeated deployment. Orders and PostgreSQL both finished 1/1 Running, with data-postgres-0 Bound to its original 1 GiB local-path PV. Use -SkipPostgres for repeat K3s-only checks.
 
-## Remaining blockers
+## Verification scope and environment
 
 - Docker Desktop is running and normal PowerShell can access it. This assistant session receives permission denied on the dockerDesktopLinuxEngine pipe under a Low Mandatory Level token; sandbox approvals are disabled. The user must launch the prepared external commands. The assistant can then read their saved reports and fix failures.
-- The 142-test filtering follow-up has now passed PostgreSQL/image verification. The next run should use -SkipPostgres to repeat only Kubernetes.
+- The 142-test filtering follow-up passed PostgreSQL/image verification locally and the real GitHub Actions quality job.
 - Exec-based source/report transfer is now proven in the real development container. Docker 29.9.0, k3d 5.9.0, make 4.4.1 and kubectl are available there.
-- Registry DNS recovery passed on the retained cluster. Fresh runs now use matching explicit registry names, including default k3d-cluster-registry; a clean runtime run of this final fresh-cluster naming configuration has not yet been observed.
+- Registry DNS recovery passed on the retained cluster. Fresh runs use matching explicit registry names, including default k3d-cluster-registry. CI now runs fresh Kubernetes acceptance automatically; consult the PR's Kubernetes acceptance check for its latest outcome.
 - The launcher now supports -ResumeRun bc80a18b915d. It validates prior saved metadata and unchanged image inputs, repairs aliases only on that owned registry/cluster network, restarts the pending Orders Deployment to trigger a fresh pull, and continues deployment/API/Pod/PVC checks without recreating the cluster or image. No registry data or PostgreSQL data is deleted. The actual resumed run completed with Result: PASSED.
 - Kubernetes ingress/API, application-to-PostgreSQL connectivity and Pod/PVC restart persistence passed inside the development container. Windows browser access via VS Code port forwarding remains unverified.
-- GitHub CLI authentication is invalid, Git integration writes previously returned 403, and the native credential helper cannot enumerate stored credentials. Push/PR creation and actual GitHub Actions/Codecov reports remain pending. Local git staging is available in this nested repository.
+- GitHub publication succeeded through the connected GitHub API after its write access became available. Invalid CLI credentials no longer block this PR. GitHub Actions and Codecov results were observed directly.
 
 Use Refs #... in PR descriptions and avoid auto-closing stories before sprint review.
 
@@ -96,12 +99,17 @@ To resume the retained verification cluster after the registry naming fix:
 
 The registry network is briefly disconnected/reconnected with corrected aliases. The registry image store and PostgreSQL PVC are retained. The resume path verifies existing image inputs against the old snapshot before reusing the image. Fresh runs use corrected explicit registry naming directly.
 
-## GitHub publication handoff
+## GitHub publication and CI evidence
 
-Local implementation/verification checkpoint committed as 23ec61c. Public fetch confirms origin/master is 6e1deb8 and this branch already includes it. GitHub CLI still reports its active login as invalid in the assistant session; remote feature branch and PR do not exist yet.
+[PR #45](https://github.com/CSCI-GA-2820-FA26-003/orders/pull/45) targets master and references stories #36-44 without closing them. The connected GitHub API published commit 4de2fb5; its tree 37328852bd104232f0e09609ce78b58a38c291db exactly matches the locally verified source. Local implementation history is preserved on feature/sprint2-local-history, and feature/sprint2-foundation tracks the published branch.
 
-The prepared scripts/publish-sprint2.ps1 launcher checks the expected clean feature branch, uses the user's normal GitHub CLI login (requesting workflow scope when required for the CI file), optionally verifies a fresh K3s cluster with the corrected naming, pushes the feature branch without force, and creates/reuses a draft PR referencing stories #36-44. It records the PR URL and commit in .test-tmp/github-handoff-<id>/result.json for follow-up checks. Login device codes/tokens are not recorded by the launcher. The script's syntax has been checked; publication has not run.
+[GitHub Actions run 40730224809](https://github.com/CSCI-GA-2820-FA26-003/orders/actions/runs/40730224809) completed successfully:
+- 142 tests passed on PostgreSQL 15; coverage 99.02% (506/511 lines).
+- flake8 passed; pylint scored 10.00/10.
+- Codecov upload using the existing CODECOV_TOKEN succeeded.
+- [Codecov PR report](https://app.codecov.io/gh/CSCI-GA-2820-FA26-003/orders/pull/45) appeared with a successful 100.00% patch check (95.00% target).
+- Codecov's welcome comment notes that default-branch baseline comparisons become available after the first merge.
 
-    powershell -NoProfile -File "D:\codex\devoops\orders\scripts\publish-sprint2.ps1" -VerifyFreshCluster
+CI additionally runs a fresh K3s acceptance job after quality checks. It installs k3d v5.9.0 with the release asset's SHA-256 verified, executes scripts/verify-kubernetes.sh, and uploads only verification.log, resources.txt and available-replicas.txt. Kubeconfig and Secret values are excluded. The job checks actual make cluster/build/push/deploy, Ingress/API behavior, PostgreSQL connectivity, Pod recreation with the same PVC/PV, and data/Secret persistence across repeated deployment.
 
-After the PR exists, inspect its actual GitHub Actions and Codecov results. A local pass is not a substitute for those remote acceptance checks. Keep stories open for review.
+The Windows publication launcher remains available as an optional GitHub CLI fallback. No further user login was needed for the connected API publication. Keep stories open for teammate/sprint review.

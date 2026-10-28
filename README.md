@@ -611,3 +611,8 @@ for that push without changing global Git credential configuration. Publication
 results are saved under `.test-tmp/github-handoff-<run-id>/`; actual CI and Codecov
 reports must then be reviewed on the PR. Omit `-VerifyFreshCluster` when retrying
 publication after the fresh cluster check has already passed.
+
+CI also runs a fresh K3s acceptance job after tests and lint. It verifies the
+actual Makefile build/push/deploy targets, Ingress API and PostgreSQL Pod/PVC
+persistence, then saves allowlisted reports as the `kubernetes-acceptance`
+workflow artifact. Kubeconfig and database Secret values are excluded.
