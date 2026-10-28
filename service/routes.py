@@ -24,6 +24,7 @@ and Delete Orders
 from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
 from service.models import Order, Item, OrderStatus
+from service.models.order import InvalidOrderStateError
 from service.common import status  # HTTP Status Codes
 
 
@@ -46,6 +47,28 @@ def index():
 ######################################################################
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    """Return a lightweight liveness response for the running service."""
+    return jsonify(status="OK"), status.HTTP_200_OK
+
+
+@app.route("/orders/<int:order_id>/cancel", methods=["PUT"])
+def cancel_order(order_id):
+    """Cancel an eligible Order and return its persisted representation."""
+    order = Order.find(order_id)
+    if order is None:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Order with id [{order_id}] was not found",
+        )
+    try:
+        order.cancel()
+    except InvalidOrderStateError as error:
+        abort(status.HTTP_409_CONFLICT, description=str(error))
+    return jsonify(order.serialize()), status.HTTP_200_OK
 
 
 ######################################################################
@@ -155,10 +178,27 @@ def update_order_item(order_id, item_id):
 ######################################################################
 @app.route("/orders", methods=["GET"])
 def list_orders():
-    """Returns all of the Orders"""
+    """Return all orders, or only those matching an exact status."""
     app.logger.info("Request for order list")
-
-    orders = Order.all()
+    unsupported = set(request.args) - {"status"}
+    if unsupported:
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            description="Unsupported query parameter(s): " + ", ".join(sorted(unsupported)),
+        )
+    if "status" in request.args:
+        if len(request.args.getlist("status")) != 1:
+            abort(status.HTTP_400_BAD_REQUEST, description="Specify status exactly once")
+        try:
+            order_status = OrderStatus[request.args["status"]]
+        except KeyError:
+            abort(
+                status.HTTP_400_BAD_REQUEST,
+                description="Invalid status; expected one of: " + ", ".join(OrderStatus.__members__),
+            )
+        orders = Order.find_by_status(order_status)
+    else:
+        orders = Order.all()
 
     results = [order.serialize() for order in orders]
     app.logger.info("Returning %d orders", len(results))

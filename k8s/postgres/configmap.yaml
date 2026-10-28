@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: orders
+data:
+  POSTGRES_DB: orders
+  POSTGRES_USER: postgres

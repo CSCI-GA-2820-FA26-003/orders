@@ -22,6 +22,10 @@ class OrderStatus(Enum):
     CANCELLED = "CANCELLED"
 
 
+class InvalidOrderStateError(Exception):
+    """Raised when an action is not allowed in the current order state."""
+
+
 ######################################################################
 #  O R D E R   M O D E L
 ######################################################################
@@ -53,6 +57,18 @@ class Order(db.Model, PersistentBase):
 
     def __repr__(self):
         return f"<Order customer_id=[{self.customer_id}] id=[{self.id}]>"
+
+    def cancel(self):
+        """Persist cancellation of a NEW order; repeated cancellation is a no-op."""
+        if self.status == OrderStatus.CANCELLED:
+            return
+        if self.status != OrderStatus.NEW:
+            raise InvalidOrderStateError(
+                f"Order with id [{self.id}] has status [{self.status.name}] "
+                "and cannot be cancelled"
+            )
+        self.status = OrderStatus.CANCELLED
+        self.update()
 
     @property
     def subtotal(self) -> Decimal:
@@ -112,6 +128,11 @@ class Order(db.Model, PersistentBase):
     ##################################################
     # CLASS METHODS
     ##################################################
+
+    @classmethod
+    def find_by_status(cls, order_status: OrderStatus):
+        """Return only orders with the requested status."""
+        return cls.query.filter(cls.status == order_status).all()
 
     @classmethod
     def find_by_customer_id(cls, customer_id: int):

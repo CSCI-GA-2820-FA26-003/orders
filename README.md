@@ -1,5 +1,8 @@
 # NYU DevOps Orders Service
 
+[![CI](https://github.com/CSCI-GA-2820-FA26-003/orders/actions/workflows/ci.yml/badge.svg)](https://github.com/CSCI-GA-2820-FA26-003/orders/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/CSCI-GA-2820-FA26-003/orders/branch/master/graph/badge.svg)](https://codecov.io/gh/CSCI-GA-2820-FA26-003/orders)
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Language-Python-blue.svg)](https://python.org/)
 
@@ -482,3 +485,129 @@ Copyright (c) 2016, 2025 [John Rofrano](https://www.linkedin.com/in/JohnRofrano/
 Licensed under the Apache License. See [LICENSE](LICENSE)
 
 This repository is part of the New York University (NYU) masters class: **CSCI-GA.2820-003 DevOps and Agile Methodologies** created and taught by [John Rofrano](https://cs.nyu.edu/~rofrano/), Adjunct Instructor, NYU Courant Institute, Graduate Division, Computer Science, and NYU Stern School of Business.
+
+## Sprint 2 API additions
+
+`GET /orders?status=NEW` filters at the model query level. Supported statuses use
+existing enum names: `NEW`, `SHIPPED`, `DELIVERED`, and `CANCELLED`. Without a query,
+all orders are returned; a valid filter with no matches returns HTTP 200 and `[]`.
+An empty, unknown or incorrectly cased status, repeated `status` parameters, or an
+unsupported query key returns HTTP 400 using the existing JSON error envelope.
+
+`GET /health` returns HTTP 200 with `{"status":"OK"}` for liveness checks.
+
+`PUT /orders/{order_id}/cancel` changes a `NEW` order to `CANCELLED` and returns
+HTTP 200 with the order JSON. It preserves the order and its items. Repeating the
+request returns 200 with the same cancelled order. Cancelling a `SHIPPED` or
+`DELIVERED` order returns 409; a missing order returns 404. Both errors use the
+existing `status`, `error`, `message` envelope.
+
+```bash
+curl -i http://localhost:8080/health
+curl -i -X PUT http://localhost:8080/orders/1/cancel
+```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs unit tests against a dedicated PostgreSQL `testdb`,
+flake8 and pylint on pull requests targeting `master` and pushes to `master`.
+Tests enforce at least 95% service coverage and produce `coverage.xml`. Codecov
+uploads use the existing `CODECOV_TOKEN` repository secret and fail if an upload
+fails. Fork PRs still run all quality checks; the upload is skipped because
+GitHub does not expose repository secrets to them.
+
+## Local Kubernetes
+
+Run these commands from a Linux shell or the development container with Docker,
+k3d, kubectl, make and Python 3 installed. Docker must be running. The local
+registry is exposed at `localhost:5000`; Kubernetes maps this registry to
+`k3d-cluster-registry:5000` using `config/registries.yaml`.
+
+```bash
+make cluster
+make build
+make push
+make deploy
+curl -fsS http://localhost:8080/health
+```
+
+The cluster is named `nyu-devops`, the namespace is `orders`, and ingress listens
+on `127.0.0.1:8080`. PostgreSQL runs as a StatefulSet with database `orders` and a
+1 GiB PVC using K3s `local-path` storage. Deployment creates a random local
+password in Secret `orders-db` once, then reuses it on subsequent deployments.
+The Orders application reads its `DATABASE_URI` from the same Secret. No database
+password is committed to the manifests. `make deploy` selects the context
+`k3d-nyu-devops` explicitly and waits for PostgreSQL before starting Orders.
+
+Demonstrate the API and persistence in this local cluster:
+
+```bash
+curl -i -X POST http://localhost:8080/orders \
+  -H 'Content-Type: application/json' \
+  -d '{"customer_id":123,"status":"NEW","items":[{"product_id":9,"quantity":2,"unit_price":12.50}]}'
+# Substitute the ID returned by POST below.
+curl -i http://localhost:8080/orders/1
+curl -i http://localhost:8080/orders
+curl -i -X PUT http://localhost:8080/orders/1/cancel
+kubectl --context k3d-nyu-devops -n orders exec postgres-0 -- pg_isready -U postgres -d orders
+kubectl --context k3d-nyu-devops -n orders rollout restart statefulset/postgres
+kubectl --context k3d-nyu-devops -n orders rollout status statefulset/postgres --timeout=180s
+curl -i http://localhost:8080/orders/1
+curl -i -X DELETE http://localhost:8080/orders/1
+```
+
+The PVC survives a PostgreSQL pod restart. Removing the whole k3d cluster removes
+its node-local storage. Use `make cluster-rm` only when the cluster is disposable.
+These commands are the acceptance procedure; local Kubernetes and Codecov results
+must be observed before their stories are marked complete.
+
+For automated acceptance checks from Windows with the existing `nyu-project`
+development container, run from the project root in a normal PowerShell session with Docker access:
+
+```powershell
+powershell -NoProfile -File ".\scripts\verify-kubernetes.ps1"
+```
+
+This first runs the PostgreSQL tests, lint, image and HTTP verification. It then
+copies the current deployment inputs into an isolated snapshot in the existing
+Linux development container using checksum-verified exec stdin transfer, then runs
+the actual `make cluster`, `make build`,
+`make push` and `make deploy` targets. The cluster, registry and ports are unique
+to the run. The checks cover ingress/API behavior with mixed statuses, database
+connectivity, recreation of the PostgreSQL Pod with the same PVC/PV, persisted
+order/item values, and repeated deployment without replacing the database Secret.
+Use `-SkipPostgres` only when repeating the Kubernetes stage after the tests pass.
+Use `-Container NAME` if the existing development container has a different name.
+
+Reports are copied to `.test-tmp/kubernetes-<run-id>/`. The verification cluster
+remains inside the development container for inspection; `connection.txt` records
+the commands to inspect it. Its ingress endpoint is inside that container.
+Access from a Windows browser requires forwarding that port through VS Code.
+The runner does not verify GitHub Actions or Codecov. Both verification scripts
+stop on failure; consult `SPRINT2.md` for checks actually observed so far.
+
+The Makefile also accepts `REGISTRY_NAME`, `REGISTRY_PORT`, `REGISTRY_CONFIG` and
+`INGRESS_PORT` overrides. A custom registry name/port requires a matching mirror
+configuration; the automated runner generates it for its isolated cluster.
+To resume a retained verification cluster, pass `-SkipPostgres -ResumeRun RUN_ID`,
+where `RUN_ID` is the 12-character suffix of the original report directory.
+The launcher validates that run's metadata and unchanged image inputs before
+reusing its image and cluster. Recovery repairs aliases only on that run's local
+registry network and restarts the pending Orders rollout; existing database/PVC
+and registry data are preserved. Fresh clusters use an explicit registry name
+that exactly matches their mirror configuration.
+
+To publish this Sprint 2 feature branch from normal Windows PowerShell after local
+verification, run from the repository root:
+
+```powershell
+powershell -NoProfile -File ".\scripts\publish-sprint2.ps1" -VerifyFreshCluster
+```
+
+The launcher checks that the branch is clean, completes GitHub CLI login in the
+user's terminal/browser when needed, verifies a fresh isolated K3s cluster,
+pushes the feature branch and creates a draft PR. It uses the GitHub CLI identity
+for that push without changing global Git credential configuration. Publication
+results are saved under `.test-tmp/github-handoff-<run-id>/`; actual CI and Codecov
+reports must then be reviewed on the PR. Omit `-VerifyFreshCluster` when retrying
+publication after the fresh cluster check has already passed.

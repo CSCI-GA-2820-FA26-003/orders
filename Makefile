@@ -1,6 +1,10 @@
 # These can be overidden with env vars.
-REGISTRY ?= cluster-registry:5000
-IMAGE_NAME ?= petshop
+REGISTRY_NAME ?= k3d-cluster-registry
+REGISTRY_PORT ?= 5000
+REGISTRY_CONFIG ?= ./config/registries.yaml
+INGRESS_PORT ?= 8080
+REGISTRY ?= localhost:$(REGISTRY_PORT)
+IMAGE_NAME ?= orders
 IMAGE_TAG ?= 1.0
 IMAGE ?= $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 PLATFORM ?= "linux/amd64,linux/arm64"
@@ -32,9 +36,9 @@ install: ## Install Python dependencies
 .PHONY: lint
 lint: ## Run the linter
 	$(info Running linting...)
-	-flake8 service tests --count --select=E9,F63,F7,F82 --show-source --statistics
-	-flake8 service tests --count --max-complexity=10 --max-line-length=127 --statistics
-	-pylint service tests --max-line-length=127
+	flake8 service tests --count --select=E9,F63,F7,F82 --show-source --statistics
+	flake8 service tests --count --max-complexity=10 --max-line-length=127 --statistics
+	pylint service tests --max-line-length=127
 
 .PHONY: test
 test: ## Run the unit tests
@@ -56,12 +60,12 @@ secret: ## Generate a secret hex key
 .PHONY: cluster
 cluster: ## Create a K3D Kubernetes cluster with load balancer and registry
 	$(info Creating Kubernetes cluster $(CLUSTER) with a registry and 1 worker nodes...)
-	k3d cluster create $(CLUSTER) --agents 1 --registry-create cluster-registry:5000 --registry-config ./config/registries.yaml --port '8080:80@loadbalancer'
+	k3d cluster create $(CLUSTER) --agents 1 --registry-create $(REGISTRY_NAME):127.0.0.1:$(REGISTRY_PORT) --registry-config $(REGISTRY_CONFIG) --port '127.0.0.1:$(INGRESS_PORT):80@loadbalancer'
 
 .PHONY: cluster-rm
 cluster-rm: ## Remove a K3D Kubernetes cluster
 	$(info Removing Kubernetes cluster...)
-	k3d cluster delete nyu-devops
+	k3d cluster delete $(CLUSTER)
 
 .PHONY: import
 import: ## Import the image into the local K3D cluster
@@ -71,7 +75,7 @@ import: ## Import the image into the local K3D cluster
 .PHONY: deploy
 deploy: ## Deploy the service on local Kubernetes
 	$(info Deploying service locally...)
-	kubectl apply -R -f k8s/
+	bash scripts/deploy.sh "$(CLUSTER)" "$(IMAGE)" "http://localhost:$(INGRESS_PORT)"
 
 ############################################################
 # COMMANDS FOR BUILDING THE IMAGE

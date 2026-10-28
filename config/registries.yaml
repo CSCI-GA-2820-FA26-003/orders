@@ -1,4 +1,4 @@
 mirrors:
-  "cluster-registry:5000":
+  "localhost:5000":
     endpoint:
-    - "http://cluster-registry:5000"
+      - "http://k3d-cluster-registry:5000"
