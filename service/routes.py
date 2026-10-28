@@ -155,10 +155,22 @@ def update_order_item(order_id, item_id):
 ######################################################################
 @app.route("/orders", methods=["GET"])
 def list_orders():
-    """Returns all of the Orders"""
+    """Returns all of the Orders, optionally filtered by customer_id"""
     app.logger.info("Request for order list")
 
-    orders = Order.all()
+    customer_id = request.args.get("customer_id")
+    if customer_id is not None:
+        try:
+            customer_id = int(customer_id)
+        except ValueError:
+            abort(
+                status.HTTP_400_BAD_REQUEST,
+                description=f"customer_id must be an integer, not [{customer_id}]",
+            )
+        app.logger.info("Filtering orders by customer_id: %s", customer_id)
+        orders = Order.find_by_customer_id(customer_id)
+    else:
+        orders = Order.all()
 
     results = [order.serialize() for order in orders]
     app.logger.info("Returning %d orders", len(results))

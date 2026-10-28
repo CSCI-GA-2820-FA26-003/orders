@@ -301,6 +301,15 @@ curl -i http://localhost:8080/orders
 `GET /orders` returns **200 OK** with an array of every Order, each including its
 Items. Returns `[]` when there are no Orders.
 
+To list only one customer's Orders, add the `customer_id` query string:
+
+```bash
+curl -i "http://localhost:8080/orders?customer_id=42"
+```
+
+- **200 OK:** An array of the customer's Orders, or `[]` if they have none.
+- **400 Bad Request:** `customer_id` is not an integer.
+
 ### Read an order
 
 ```bash
