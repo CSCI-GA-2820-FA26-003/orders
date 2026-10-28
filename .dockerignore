@@ -1,0 +1,13 @@
+.git
+.venv
+.test-deps
+__pycache__
+*.pyc
+.coverage
+coverage.xml
+htmlcov
+.pytest_cache
+.env
+.test-tmp
+.test-requirements.txt
+.verification-kubeconfig
