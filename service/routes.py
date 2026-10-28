@@ -48,6 +48,12 @@ def index():
 ######################################################################
 
 
+@app.route("/health", methods=["GET"])
+def health():
+    """Return a liveness response without accessing the database."""
+    return jsonify(status="OK"), status.HTTP_200_OK
+
+
 ######################################################################
 # CREATE AN ORDER
 ######################################################################
