@@ -307,6 +307,43 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.get_json(), [])
 
     ######################################################################
+    #  Q U E R Y   O R D E R S   B Y   C U S T O M E R
+    ######################################################################
+
+    def test_query_orders_by_customer(self):
+        """It should List only the Orders of the requested customer"""
+        for customer_id in [1, 1, 2]:
+            order = OrderFactory(customer_id=customer_id)
+            ItemFactory(order=order)
+            order.create()
+
+        resp = self.client.get("/orders", query_string={"customer_id": 1})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 2)
+        for order in data:
+            self.assertEqual(order["customer_id"], 1)
+            self.assertEqual(len(order["items"]), 1)
+
+    def test_query_orders_by_customer_no_match(self):
+        """It should return an empty list when the customer has no Orders"""
+        self._create_orders(2)
+        resp = self.client.get("/orders?customer_id=0")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json(), [])
+
+    def test_query_orders_by_bad_customer_id(self):
+        """It should return 400 when customer_id is not an integer"""
+        self._create_orders(1)
+        for customer_id in ["abc", "1.5", ""]:
+            resp = self.client.get("/orders", query_string={"customer_id": customer_id})
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertEqual(resp.content_type, "application/json")
+            data = resp.get_json()
+            self.assertEqual(data["error"], "Bad Request")
+            self.assertIn("customer_id", data["message"])
+
+    ######################################################################
     #  R E A D   A N   O R D E R
     ######################################################################
 
