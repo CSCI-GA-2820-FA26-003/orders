@@ -222,6 +222,7 @@ uncovered lines highlighted.
 | `GET`    | `/orders`                               | List all Orders                 | `200 OK`         |
 | `GET`    | `/orders/{order_id}`                    | Read an Order by id             | `200 OK`         |
 | `PUT`    | `/orders/{order_id}`                    | Update an Order                 | `200 OK`         |
+| `PUT`    | `/orders/{order_id}/cancel`             | Cancel an unshipped Order        | `200 OK`         |
 | `DELETE` | `/orders/{order_id}`                    | Delete an Order and its Items   | `204 No Content` |
 | `POST`   | `/orders/{order_id}/items`              | Add an Item to an Order         | `201 Created`    |
 | `GET`    | `/orders/{order_id}/items`              | List all Items in an Order      | `200 OK`         |
@@ -353,6 +354,26 @@ Items are kept.
   a valid value, or an Item is invalid. The Order is left unchanged.
 - **404 Not Found:** The Order does not exist.
 - **415 Unsupported Media Type:** The `Content-Type` is not `application/json`.
+
+### Cancel an order
+
+```bash
+curl -i -X PUT http://localhost:8080/orders/123/cancel
+```
+
+`PUT /orders/{order_id}/cancel` is a stateful Action. It requires no request body
+or `Content-Type` header.
+
+- **200 OK:** A `NEW` Order is saved with status `CANCELLED`, and the response
+  contains the updated Order. Its identity, customer, creation timestamp, Items,
+  and subtotal are preserved, and other Orders are unaffected. Empty Orders can
+  also be cancelled.
+- **200 OK:** Repeating the action on an already `CANCELLED` Order returns it
+  unchanged, including its `updated_at` timestamp.
+- **409 Conflict:** A `SHIPPED` or `DELIVERED` Order cannot be cancelled. The
+  response uses the common JSON error format, and the Order is unchanged.
+- **404 Not Found:** The Order does not exist. The response uses the common JSON
+  error format.
 
 ### Delete an order
 

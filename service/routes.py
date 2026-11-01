@@ -23,7 +23,7 @@ and Delete Orders
 
 from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
-from service.models import Order, Item, OrderStatus
+from service.models import Order, Item, OrderStatus, OrderStateError
 from service.common import status  # HTTP Status Codes
 
 
@@ -119,6 +119,29 @@ def update_order(order_id):
     order.deserialize(request.get_json())
     order.update()
     app.logger.info("Order with id: %s updated", order_id)
+    return jsonify(order.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# CANCEL AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>/cancel", methods=["PUT"])
+def cancel_order(order_id):
+    """Cancels an Order that has not shipped yet."""
+    app.logger.info("Request to cancel Order with id: %s", order_id)
+    order = Order.find(order_id)
+    if order is None:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            description=f"Order with id [{order_id}] was not found",
+        )
+
+    try:
+        order.cancel()
+    except OrderStateError as error:
+        abort(status.HTTP_409_CONFLICT, description=str(error))
+
+    app.logger.info("Order with id: %s cancelled", order_id)
     return jsonify(order.serialize()), status.HTTP_200_OK
 
 

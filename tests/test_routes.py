@@ -21,6 +21,7 @@ Orders API Service Test Suite
 # pylint: disable=duplicate-code,too-many-lines
 import os
 import logging
+from datetime import datetime
 from decimal import Decimal
 from unittest import TestCase
 from wsgi import app
@@ -175,6 +176,114 @@ class TestOrderService(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         self.assertEqual(Order.all(), [])
+
+    ######################################################################
+    #  C A N C E L   A N   O R D E R
+    ######################################################################
+
+    def test_cancel_order_without_body(self):
+        """It should persist a bodyless cancellation and preserve related data."""
+        order = OrderFactory(status=OrderStatus.NEW)
+        ItemFactory(order=order)
+        ItemFactory(order=order)
+        order.create()
+        other = OrderFactory(status=OrderStatus.NEW)
+        ItemFactory(order=other)
+        other.create()
+        order_id, other_id = order.id, other.id
+        before, other_before = order.serialize(), other.serialize()
+        db.session.remove()
+
+        resp = self.client.put(f"/orders/{order_id}/cancel")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertIsNone(resp.request.content_type)
+        data = resp.get_json()
+        self.assertEqual(data["status"], "CANCELLED")
+        for field in ("id", "customer_id", "created_at", "items", "subtotal"):
+            self.assertEqual(data[field], before[field])
+        db.session.remove()
+        self.assertEqual(self.client.get(f"/orders/{order_id}").get_json(), data)
+        self.assertEqual(self.client.get(f"/orders/{other_id}").get_json(), other_before)
+
+    def test_cancel_already_cancelled_order(self):
+        """It should keep a cancelled Order and its timestamp unchanged on retries."""
+        order = OrderFactory(status=OrderStatus.CANCELLED)
+        order.updated_at = datetime(2020, 1, 1)
+        ItemFactory(order=order)
+        order.create()
+        order_id, before = order.id, order.serialize()
+        db.session.remove()
+
+        for _ in range(2):
+            resp = self.client.put(f"/orders/{order_id}/cancel")
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            self.assertEqual(resp.content_type, "application/json")
+            self.assertEqual(resp.get_json(), before)
+            db.session.remove()
+            self.assertEqual(self.client.get(f"/orders/{order_id}").get_json(), before)
+
+    def test_cancel_rejects_fulfilled_orders(self):
+        """It should return JSON 409 without modifying shipped or delivered Orders."""
+        for order_status in (OrderStatus.SHIPPED, OrderStatus.DELIVERED):
+            with self.subTest(status=order_status):
+                order = OrderFactory(status=order_status)
+                ItemFactory(order=order)
+                order.create()
+                order_id, before = order.id, order.serialize()
+                db.session.remove()
+
+                resp = self.client.put(f"/orders/{order_id}/cancel")
+
+                self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+                self.assertEqual(resp.content_type, "application/json")
+                error = resp.get_json()
+                self.assertEqual(set(error), {"status", "error", "message"})
+                self.assertEqual(error["status"], status.HTTP_409_CONFLICT)
+                self.assertEqual(error["error"], "Conflict")
+                self.assertIn(order_status.name, error["message"])
+                db.session.remove()
+                self.assertEqual(self.client.get(f"/orders/{order_id}").get_json(), before)
+
+    def test_cancel_missing_order(self):
+        """It should return JSON 404 without creating or modifying any Order."""
+        order = OrderFactory(status=OrderStatus.NEW)
+        ItemFactory(order=order)
+        order.create()
+        order_id, before = order.id, order.serialize()
+        missing_id = order_id + 1
+        db.session.remove()
+
+        resp = self.client.put(f"/orders/{missing_id}/cancel")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.content_type, "application/json")
+        error = resp.get_json()
+        self.assertEqual(set(error), {"status", "error", "message"})
+        self.assertEqual(error["status"], status.HTTP_404_NOT_FOUND)
+        self.assertEqual(error["error"], "Not Found")
+        self.assertIn(str(missing_id), error["message"])
+        db.session.remove()
+        self.assertEqual(len(Order.all()), 1)
+        self.assertEqual(self.client.get(f"/orders/{order_id}").get_json(), before)
+
+    def test_cancel_empty_order(self):
+        """It should cancel an empty Order and return a zero subtotal."""
+        order = OrderFactory(status=OrderStatus.NEW)
+        order.create()
+        order_id = order.id
+        db.session.remove()
+
+        resp = self.client.put(f"/orders/{order_id}/cancel")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["status"], "CANCELLED")
+        self.assertEqual(data["items"], [])
+        self.assertEqual(data["subtotal"], 0)
+        db.session.remove()
+        self.assertEqual(self.client.get(f"/orders/{order_id}").get_json(), data)
 
     ######################################################################
     #  U P D A T E   A N   O R D E R
