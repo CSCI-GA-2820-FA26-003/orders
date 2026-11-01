@@ -5,11 +5,12 @@ Test cases for Order Model
 # pylint: disable=duplicate-code
 import os
 import logging
+from datetime import datetime
 from decimal import Decimal
 from unittest import TestCase
 from unittest.mock import patch
 from wsgi import app
-from service.models import Order, Item, OrderStatus, DataValidationError, db
+from service.models import Order, Item, OrderStatus, OrderStateError, DataValidationError, db
 from tests.factories import OrderFactory, ItemFactory
 
 DATABASE_URI = os.getenv(
@@ -156,6 +157,84 @@ class TestOrder(TestCase):
             commit_mock.assert_called_once()
         # the change should have been rolled back
         self.assertEqual(Order.find(order.id).status, OrderStatus.NEW)
+
+    def test_cancel_order_preserves_items_and_other_orders(self):
+        """It should persist cancellation while preserving items and other Orders."""
+        order = OrderFactory(status=OrderStatus.NEW)
+        ItemFactory(order=order)
+        ItemFactory(order=order)
+        order.create()
+        other = OrderFactory(status=OrderStatus.NEW)
+        ItemFactory(order=other)
+        other.create()
+        order_id, other_id = order.id, other.id
+        before, other_before = order.serialize(), other.serialize()
+
+        order.cancel()
+        db.session.remove()
+
+        saved = Order.find(order_id).serialize()
+        self.assertEqual(saved["status"], "CANCELLED")
+        for field in ("id", "customer_id", "created_at", "items", "subtotal"):
+            self.assertEqual(saved[field], before[field])
+        self.assertEqual(Order.find(other_id).serialize(), other_before)
+
+    def test_cancel_empty_order(self):
+        """It should cancel an Order that has no Items."""
+        order = OrderFactory(status=OrderStatus.NEW)
+        order.create()
+        order_id = order.id
+
+        order.cancel()
+        db.session.remove()
+
+        saved = Order.find(order_id)
+        self.assertEqual(saved.status, OrderStatus.CANCELLED)
+        self.assertEqual(saved.items, [])
+        self.assertEqual(saved.subtotal, Decimal("0.00"))
+
+    def test_cancel_already_cancelled_order(self):
+        """It should leave an already cancelled Order unchanged without a commit."""
+        order = OrderFactory(status=OrderStatus.CANCELLED)
+        order.updated_at = datetime(2020, 1, 1)
+        ItemFactory(order=order)
+        order.create()
+        order_id, before = order.id, order.serialize()
+
+        with patch("service.models.db.session.commit") as commit_mock:
+            order.cancel()
+            commit_mock.assert_not_called()
+        db.session.remove()
+
+        self.assertEqual(Order.find(order_id).serialize(), before)
+
+    def test_cancel_rejects_fulfilled_orders(self):
+        """It should preserve shipped and delivered Orders when cancellation fails."""
+        for order_status in (OrderStatus.SHIPPED, OrderStatus.DELIVERED):
+            with self.subTest(status=order_status):
+                order = OrderFactory(status=order_status)
+                ItemFactory(order=order)
+                order.create()
+                order_id, before = order.id, order.serialize()
+
+                with self.assertRaisesRegex(OrderStateError, "cannot be cancelled"):
+                    order.cancel()
+                db.session.remove()
+
+                self.assertEqual(Order.find(order_id).serialize(), before)
+
+    def test_cancel_rolls_back_on_persistence_failure(self):
+        """It should restore the saved Order when cancellation cannot be persisted."""
+        order = OrderFactory(status=OrderStatus.NEW)
+        ItemFactory(order=order)
+        order.create()
+        order_id, before = order.id, order.serialize()
+
+        with patch("service.models.db.session.commit", side_effect=Exception("Database unavailable")):
+            self.assertRaises(DataValidationError, order.cancel)
+        db.session.remove()
+
+        self.assertEqual(Order.find(order_id).serialize(), before)
 
     def test_delete_an_order(self):
         """It should Delete an Order from the database"""

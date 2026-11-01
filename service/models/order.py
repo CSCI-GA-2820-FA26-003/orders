@@ -22,6 +22,10 @@ class OrderStatus(Enum):
     CANCELLED = "CANCELLED"
 
 
+class OrderStateError(Exception):
+    """Raised when an Order's status does not allow an action."""
+
+
 ######################################################################
 #  O R D E R   M O D E L
 ######################################################################
@@ -108,6 +112,18 @@ class Order(db.Model, PersistentBase):
         if new_items is not None:
             self.items = new_items
         return self
+
+    def cancel(self) -> None:
+        """Cancels a NEW Order, leaving an already cancelled Order unchanged."""
+        if self.status == OrderStatus.CANCELLED:
+            return
+        if self.status != OrderStatus.NEW:
+            raise OrderStateError(
+                f"Order with id [{self.id}] has status [{self.status.name}] "
+                "and cannot be cancelled"
+            )
+        self.status = OrderStatus.CANCELLED
+        self.update()
 
     ##################################################
     # CLASS METHODS
