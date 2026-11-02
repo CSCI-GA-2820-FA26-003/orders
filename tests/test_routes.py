@@ -419,6 +419,67 @@ class TestOrderService(TestCase):
     #  Q U E R Y   O R D E R S   B Y   C U S T O M E R
     ######################################################################
 
+    def test_query_orders_by_status(self):
+        """It should return matching Orders with unchanged serialized Items."""
+        expected = {}
+        for order_status in OrderStatus:
+            order = OrderFactory(status=order_status)
+            ItemFactory(order=order)
+            order.create()
+            expected[order_status] = order.serialize()
+        db.session.remove()
+        for order_status in OrderStatus:
+            for value in (order_status.name, order_status.name.lower(), order_status.name.title()):
+                with self.subTest(status=value):
+                    resp = self.client.get("/orders", query_string={"status": value})
+                    self.assertEqual(resp.status_code, status.HTTP_200_OK)
+                    self.assertEqual(resp.get_json(), [expected[order_status]])
+        self.assertEqual(len(self.client.get("/orders").get_json()), len(OrderStatus))
+
+    def test_query_orders_by_status_and_customer(self):
+        """It should intersect status and customer filters, including customer zero."""
+        expected = None
+        for customer_id, order_status in ((0, OrderStatus.NEW), (1, OrderStatus.NEW), (0, OrderStatus.SHIPPED)):
+            order = OrderFactory(customer_id=customer_id, status=order_status)
+            order.create()
+            if customer_id == 0 and order_status == OrderStatus.NEW:
+                expected = order.serialize()
+        resp = self.client.get("/orders?customer_id=0&status=NEW")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json(), [expected])
+        resp = self.client.get("/orders?customer_id=1&status=SHIPPED")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json(), [])
+
+    def test_query_orders_by_status_no_matches(self):
+        """It should return an empty array for a valid status with no matches."""
+        for populated in (False, True):
+            if populated:
+                OrderFactory(status=OrderStatus.NEW).create()
+            resp = self.client.get("/orders?status=DELIVERED")
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            self.assertEqual(resp.get_json(), [])
+
+    def test_query_orders_invalid_parameters(self):
+        """It should reject invalid, unsupported and repeated filters as JSON 400."""
+        order = OrderFactory()
+        order.create()
+        before = order.serialize()
+        for query in (
+            "status=pending", "status=", "status=123", "status=%20NEW%20",
+            "unknown=NEW", "status=NEW&unknown=x", "status=NEW&status=SHIPPED",
+            "customer_id=1&customer_id=2", "status=NEW&customer_id=abc",
+        ):
+            with self.subTest(query=query):
+                resp = self.client.get(f"/orders?{query}")
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(resp.content_type, "application/json")
+                self.assertEqual(resp.get_json()["status"], 400)
+                self.assertEqual(resp.get_json()["error"], "Bad Request")
+                self.assertTrue(resp.get_json()["message"])
+        db.session.remove()
+        self.assertEqual(Order.find(before["id"]).serialize(), before)
+
     def test_query_orders_by_customer(self):
         """It should List only the Orders of the requested customer"""
         for customer_id in [1, 1, 2]:
