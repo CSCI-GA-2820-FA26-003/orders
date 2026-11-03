@@ -140,8 +140,10 @@ make deploy
   K3s uses the mirror in [config/registries.yaml](config/registries.yaml) to pull
   the same image from `http://cluster-registry:5000` on the Docker network.
 - `make deploy` first applies [k8s/postgres/](k8s/postgres/) and waits for
-  PostgreSQL, then applies [k8s/](k8s/) and waits for Orders and Traefik to be
-  ready. It uses context `k3d-nyu-devops` and namespace `default` explicitly.
+  PostgreSQL, then renders the selected image into a temporary deployment manifest
+  and applies it with the Orders Service and Ingress from [k8s/](k8s/).
+  It waits for Orders to be ready, then for Traefik to be created and ready.
+  It uses context `k3d-nyu-devops` and namespace `default` explicitly.
   Each wait has a 180-second timeout; slower machines can use
   `make deploy DEPLOY_TIMEOUT=300s`.
 
@@ -177,14 +179,21 @@ rows directly in PostgreSQL, run:
 make smoke-test
 ```
 
-The check creates and deletes its own test order. CI also runs the four deployment
-commands and this check against a fresh cluster.
+The check creates and deletes its own test order. After lint and the test coverage
+gate pass, CI runs the four deployment commands and this check against a fresh
+cluster.
 
-After changing the service, repeat `make build`, `make push`, and `make deploy`.
-Deployment restarts Orders so the latest image is pulled even if the tag is
-unchanged. Pods keep serving for five seconds during termination so Traefik can
-remove their endpoints before Gunicorn exits. `IMAGE_TAG` can also be overridden
-consistently on all three commands.
+After changing the service, choose a new image tag and use it consistently for
+build, push, and deployment:
+
+```bash
+make build push deploy IMAGE_TAG=1.1
+```
+
+The selected image is applied directly, so changing its tag triggers one rollout.
+Deploying again with the same tag does not restart Orders. Pods keep serving for
+five seconds during termination so Traefik can remove their endpoints before
+Gunicorn exits.
 Use the same `CLUSTER` override on every target if choosing a different cluster
 name; the local registry and published ports remain fixed.
 

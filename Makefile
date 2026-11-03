@@ -75,11 +75,13 @@ deploy: ## Deploy the service on local Kubernetes
 	$(info Deploying service locally...)
 	$(KUBECTL) apply -f k8s/postgres/
 	$(KUBECTL) rollout status statefulset/postgres --timeout=$(DEPLOY_TIMEOUT)
-	$(KUBECTL) apply -f k8s/
-	$(KUBECTL) set image deployment/orders orders=$(IMAGE)
-	# Pull the newly pushed image even when its tag has not changed.
-	$(KUBECTL) rollout restart deployment/orders
+	@set -e; \
+	manifest=$$(mktemp); \
+	trap 'rm -f "$$manifest"' EXIT; \
+	$(KUBECTL) set image --local -f k8s/deployment.yaml orders=$(IMAGE) -o yaml > "$$manifest"; \
+	$(KUBECTL) apply -f "$$manifest" -f k8s/service.yaml -f k8s/ingress.yaml
 	$(KUBECTL) rollout status deployment/orders --timeout=$(DEPLOY_TIMEOUT)
+	kubectl --context k3d-$(CLUSTER) --namespace kube-system wait --for=create deployment/traefik --timeout=$(DEPLOY_TIMEOUT)
 	kubectl --context k3d-$(CLUSTER) --namespace kube-system rollout status deployment/traefik --timeout=$(DEPLOY_TIMEOUT)
 
 .PHONY: smoke-test
