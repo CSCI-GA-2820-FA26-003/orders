@@ -1,10 +1,12 @@
-# These can be overidden with env vars.
-REGISTRY ?= cluster-registry:5000
+# These can be overridden with env vars.
+REGISTRY ?= localhost:5000
 IMAGE_NAME ?= orders
 IMAGE_TAG ?= 1.0
 IMAGE ?= $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 PLATFORM ?= "linux/amd64,linux/arm64"
 CLUSTER ?= nyu-devops
+KUBECTL ?= kubectl --context k3d-$(CLUSTER) --namespace default
+DEPLOY_TIMEOUT ?= 180s
 
 .SILENT:
 
@@ -55,13 +57,13 @@ secret: ## Generate a secret hex key
 
 .PHONY: cluster
 cluster: ## Create a K3D Kubernetes cluster with load balancer and registry
-	$(info Creating Kubernetes cluster $(CLUSTER) with a registry and 1 worker nodes...)
-	k3d cluster create $(CLUSTER) --agents 1 --registry-create cluster-registry:5000 --registry-config ./config/registries.yaml --port '8080:80@loadbalancer'
+	$(info Creating Kubernetes cluster $(CLUSTER) with a registry and 1 worker node...)
+	k3d cluster create $(CLUSTER) --agents 1 --registry-create cluster-registry:5000 --registry-config ./config/registries.yaml --port '8080:80@loadbalancer' --timeout $(DEPLOY_TIMEOUT)
 
 .PHONY: cluster-rm
 cluster-rm: ## Remove a K3D Kubernetes cluster
 	$(info Removing Kubernetes cluster...)
-	k3d cluster delete nyu-devops
+	k3d cluster delete $(CLUSTER)
 
 .PHONY: import
 import: ## Import the image into the local K3D cluster
@@ -71,7 +73,18 @@ import: ## Import the image into the local K3D cluster
 .PHONY: deploy
 deploy: ## Deploy the service on local Kubernetes
 	$(info Deploying service locally...)
-	kubectl apply -R -f k8s/
+	$(KUBECTL) apply -f k8s/postgres/
+	$(KUBECTL) rollout status statefulset/postgres --timeout=$(DEPLOY_TIMEOUT)
+	$(KUBECTL) apply -f k8s/
+	$(KUBECTL) set image deployment/orders orders=$(IMAGE)
+	# Pull the newly pushed image even when its tag has not changed.
+	$(KUBECTL) rollout restart deployment/orders
+	$(KUBECTL) rollout status deployment/orders --timeout=$(DEPLOY_TIMEOUT)
+	kubectl --context k3d-$(CLUSTER) --namespace kube-system rollout status deployment/traefik --timeout=$(DEPLOY_TIMEOUT)
+
+.PHONY: smoke-test
+smoke-test: ## Check ingress health and order persistence in PostgreSQL
+	KUBECTL='$(KUBECTL)' bash scripts/smoke-test.sh
 
 ############################################################
 # COMMANDS FOR BUILDING THE IMAGE
