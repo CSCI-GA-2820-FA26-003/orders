@@ -182,7 +182,9 @@ commands and this check against a fresh cluster.
 
 After changing the service, repeat `make build`, `make push`, and `make deploy`.
 Deployment restarts Orders so the latest image is pulled even if the tag is
-unchanged. `IMAGE_TAG` can also be overridden consistently on all three commands.
+unchanged. Pods keep serving for five seconds during termination so Traefik can
+remove their endpoints before Gunicorn exits. `IMAGE_TAG` can also be overridden
+consistently on all three commands.
 Use the same `CLUSTER` override on every target if choosing a different cluster
 name; the local registry and published ports remain fixed.
 
