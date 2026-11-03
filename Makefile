@@ -78,7 +78,8 @@ deploy: ## Deploy the service on local Kubernetes
 	@set -e; \
 	manifest=$$(mktemp); \
 	trap 'rm -f "$$manifest"' EXIT; \
-	$(KUBECTL) set image --local -f k8s/deployment.yaml orders=$(IMAGE) -o yaml > "$$manifest"; \
+	$(KUBECTL) patch --local -f k8s/deployment.yaml --type=strategic \
+		--patch '{"spec":{"template":{"spec":{"containers":[{"name":"orders","image":"$(IMAGE)"}]}}}}' -o yaml > "$$manifest"; \
 	$(KUBECTL) apply -f "$$manifest" -f k8s/service.yaml -f k8s/ingress.yaml
 	$(KUBECTL) rollout status deployment/orders --timeout=$(DEPLOY_TIMEOUT)
 	kubectl --context k3d-$(CLUSTER) --namespace kube-system wait --for=create deployment/traefik --timeout=$(DEPLOY_TIMEOUT)
