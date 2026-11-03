@@ -53,6 +53,36 @@ class TestOrder(TestCase):
     #  T E S T   C A S E S
     ######################################################################
 
+    def test_find_by_status(self):
+        """It should filter each status without changing Orders or their Items."""
+        orders = []
+        for order_status in OrderStatus:
+            for customer_id in (1, 2):
+                order = OrderFactory(status=order_status, customer_id=customer_id)
+                ItemFactory(order=order)
+                order.create()
+                orders.append(order)
+        before = {order.id: order.serialize() for order in orders}
+        db.session.remove()
+        for order_status in OrderStatus:
+            with self.subTest(status=order_status):
+                found = Order.find_by_status(order_status)
+                self.assertEqual(
+                    {order.id for order in found},
+                    {order_id for order_id, data in before.items() if data["status"] == order_status.name},
+                )
+                combined = Order.find_by_status(order_status, customer_id=1)
+                self.assertEqual(len(combined), 1)
+                self.assertEqual(combined[0].customer_id, 1)
+        self.assertEqual({order.id: order.serialize() for order in Order.all()}, before)
+
+    def test_find_by_status_no_matches(self):
+        """It should return an empty list for a status with no matching Orders."""
+        self.assertEqual(Order.find_by_status(OrderStatus.NEW), [])
+        OrderFactory(status=OrderStatus.NEW, customer_id=1).create()
+        self.assertEqual(Order.find_by_status(OrderStatus.SHIPPED), [])
+        self.assertEqual(Order.find_by_status(OrderStatus.NEW, customer_id=2), [])
+
     def test_create_an_order(self):
         """It should Create an Order and assert that it exists"""
         fake_order = OrderFactory()
