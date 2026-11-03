@@ -2,6 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Language-Python-blue.svg)](https://python.org/)
+[![Build Status](https://github.com/CSCI-GA-2820-FA26-003/orders/actions/workflows/ci.yml/badge.svg)](https://github.com/CSCI-GA-2820-FA26-003/orders/actions)
 
 A RESTful microservice for managing customer **Orders** and the **Items** that belong to them.
 
@@ -116,6 +117,92 @@ exist yet and leaves existing tables and data alone.
 4. Press `Ctrl+C` to stop the service.
 
 All request and response bodies are JSON.
+
+## Deploying to Local K3s
+
+Run these commands from the repository root **inside the dev container**, with
+Docker running. The dev container installs `docker`, `k3d`, `kubectl`, `make`,
+`curl`, and `jq`. Stop `make run` first so port **8080** is available; port
+**5000** must also be available for the local image registry.
+
+```bash
+make cluster
+make build
+make push
+make deploy
+```
+
+- `make cluster` creates the `nyu-devops` K3s cluster using K3d, with one server,
+  one worker, the `cluster-registry` container, and Traefik ingress. It maps the
+  load balancer's port 80 to the dev container's port 8080.
+- `make build` builds `localhost:5000/orders:1.0`; `make push` uploads it to the
+  registry. Docker uses the registry's published port at `localhost:5000`, while
+  K3s uses the mirror in [config/registries.yaml](config/registries.yaml) to pull
+  the same image from `http://cluster-registry:5000` on the Docker network.
+- `make deploy` first applies [k8s/postgres/](k8s/postgres/) and waits for
+  PostgreSQL, then renders the selected image into a temporary deployment manifest
+  and applies it with the Orders Service and Ingress from [k8s/](k8s/).
+  It waits for Orders to be ready, then for Traefik to be created and ready.
+  It uses context `k3d-nyu-devops` and namespace `default` explicitly.
+  Each wait has a 180-second timeout; slower machines can use
+  `make deploy DEPLOY_TIMEOUT=300s`.
+
+Check that both application pods are Running and Ready:
+
+```bash
+kubectl --context k3d-nyu-devops get pods
+curl -i http://localhost:8080/health
+```
+
+The health request goes through ingress and returns **200 OK** with
+`{"status":"OK"}`. VSCode forwards port 8080 to your computer as well.
+
+Create an order through the same ingress:
+
+```bash
+curl -i http://localhost:8080/orders \
+  -H 'Content-Type: application/json' \
+  -d '{"customer_id":42,"items":[{"product_id":789,"quantity":2,"unit_price":12.50}]}'
+```
+
+Expect **201 Created**. Read it back using the returned `id` with
+`GET /orders/<id>`. The Kubernetes service stores orders in the `orders` database
+in the PostgreSQL StatefulSet; this is separate from the dev container's Compose
+database. The StatefulSet's persistent volume preserves data across pod restarts.
+The credentials in [k8s/postgres/secret.yaml](k8s/postgres/secret.yaml) are for
+local development only.
+
+For an automated check of health, order creation, and the saved Order and Item
+rows directly in PostgreSQL, run:
+
+```bash
+make smoke-test
+```
+
+The check creates and deletes its own test order. After lint and the test coverage
+gate pass, CI runs the four deployment commands and this check against a fresh
+cluster.
+
+After changing the service, choose a new image tag and use it consistently for
+build, push, and deployment:
+
+```bash
+make build push deploy IMAGE_TAG=1.1
+```
+
+The selected image is applied directly, so changing its tag triggers one rollout.
+Deploying again with the same tag does not restart Orders. Pods keep serving for
+five seconds during termination so Traefik can remove their endpoints before
+Gunicorn exits.
+Use the same `CLUSTER` override on every target if choosing a different cluster
+name; the local registry and published ports remain fixed.
+
+To inspect a failed deployment, use `kubectl --context k3d-nyu-devops describe pod
+<pod-name>`, `kubectl --context k3d-nyu-devops logs deployment/orders`, and
+`kubectl --context k3d-nyu-devops logs postgres-0`.
+
+To remove the local cluster, run `make cluster-rm`. This also removes its database
+storage; create a fresh cluster with `make cluster` before deploying again.
 
 ## Running the Tests
 
