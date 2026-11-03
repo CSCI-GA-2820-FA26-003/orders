@@ -57,3 +57,45 @@ jobs:
         run: pytest --pspec --cov=service --cov-fail-under=95 --disable-warnings
         env:
           RETRY_COUNT: 1
+
+  deploy:
+    name: Local K3s deployment
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install K3d
+        run: |
+          curl --fail --silent --show-error --location \
+            https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+      - name: Create cluster
+        run: make cluster
+
+      - name: Build image
+        run: make build
+
+      - name: Push image
+        run: make push
+
+      - name: Deploy PostgreSQL and Orders
+        run: make deploy
+
+      - name: Verify ingress and PostgreSQL persistence
+        run: make smoke-test
+
+      - name: Show deployment diagnostics
+        if: failure()
+        run: |
+          kubectl --context k3d-nyu-devops get pods,services,ingress,pvc -o wide
+          kubectl --context k3d-nyu-devops get events --sort-by=.lastTimestamp
+          kubectl --context k3d-nyu-devops logs deployment/orders --all-containers=true --tail=100 || true
+          kubectl --context k3d-nyu-devops logs postgres-0 --tail=100 || true
+
+      - name: Remove cluster
+        if: always()
+        run: make cluster-rm
