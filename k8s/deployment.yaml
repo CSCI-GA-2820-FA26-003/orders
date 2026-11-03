@@ -1,0 +1,63 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders
+  labels:
+    app: orders
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders
+  template:
+    metadata:
+      labels:
+        app: orders
+    spec:
+      # The service exits at startup if it cannot reach the database
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:15-alpine
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -p 5432 -U postgres -d orders; do sleep 2; done
+      containers:
+        - name: orders
+          image: localhost:5000/orders:1.0
+          imagePullPolicy: Always
+          lifecycle:
+            preStop:
+              exec:
+                # Keep serving while Traefik removes this terminating endpoint.
+                command: ["sh", "-c", "sleep 5"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: DATABASE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: database_uri
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
