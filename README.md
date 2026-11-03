@@ -398,6 +398,19 @@ curl -i "http://localhost:8080/orders?customer_id=42"
 - **200 OK:** An array of the customer's Orders, or `[]` if they have none.
 - **400 Bad Request:** `customer_id` is not an integer.
 
+Use `status` to filter by `NEW`, `SHIPPED`, `DELIVERED`, or `CANCELLED`
+(case-insensitive). Combine it with `customer_id` to match both filters:
+
+```bash
+curl -i "http://localhost:8080/orders?status=NEW"
+curl -i "http://localhost:8080/orders?customer_id=42&status=new"
+```
+
+Matching Orders use the same JSON array format, including Items. No matches
+return `200 OK` with `[]`; omitting filters returns all Orders. Invalid statuses
+(including empty values), unsupported parameters, and repeated parameters return
+`400 Bad Request` using the standard JSON error response.
+
 ### Read an order
 
 ```bash
