@@ -296,7 +296,7 @@ uncovered lines highlighted.
 | `product_id` | integer | **Required**; must be positive for `POST /api/orders/{order_id}/items` |
 | `quantity`   | integer | **Required**, between 1 and 999                             |
 | `unit_price` | number  | **Required**, between 0 and 99999999.99, at most 2 decimals |
-| `line_total` | number  | Read-only, computed as `quantity �� unit_price`              |
+| `line_total` | number  | Read-only, computed as `quantity × unit_price`              |
 
 ## API Reference
 
@@ -581,28 +581,28 @@ dot-env-example     - copy to .env to use environment variables
 Pipfile             - Pipenv list of Python libraries required by your code
 
 service/                     - service python package
-������ __init__.py              - package initializer
-������ config.py                - configuration parameters
-������ routes.py                - module with service routes
-������ models                   - business models package
-��   ������ __init__.py          - package initializer
-��   ������ persistent_base.py   - shared database persistence methods
-��   ������ order.py             - Order model
-��   ������ item.py              - Item model
-������ common                   - common code package
-    ������ cli_commands.py      - Flask command to recreate all tables
-    ������ error_handlers.py    - HTTP error handling code
-    ������ log_handlers.py      - logging setup code
-    ������ status.py            - HTTP status constants
+├── __init__.py              - package initializer
+├── config.py                - configuration parameters
+├── routes.py                - module with service routes
+├── models                   - business models package
+│   ├── __init__.py          - package initializer
+│   ├── persistent_base.py   - shared database persistence methods
+│   ├── order.py             - Order model
+│   └── item.py              - Item model
+└── common                   - common code package
+    ├── cli_commands.py      - Flask command to recreate all tables
+    ├── error_handlers.py    - HTTP error handling code
+    ├── log_handlers.py      - logging setup code
+    └── status.py            - HTTP status constants
 
 tests/                       - test cases package
-������ __init__.py              - package initializer
-������ factories.py             - Factory for testing with fake objects
-������ test_cli_commands.py     - test suite for the CLI
-������ test_error_handlers.py   - test suite for the error handlers
-������ test_order.py            - test suite for the Order model
-������ test_item.py             - test suite for the Item model
-������ test_routes.py           - test suite for service routes
+├── __init__.py              - package initializer
+├── factories.py             - Factory for testing with fake objects
+├── test_cli_commands.py     - test suite for the CLI
+├── test_error_handlers.py   - test suite for the error handlers
+├── test_order.py            - test suite for the Order model
+├── test_item.py             - test suite for the Item model
+└── test_routes.py           - test suite for service routes
 ```
 
 ## License
