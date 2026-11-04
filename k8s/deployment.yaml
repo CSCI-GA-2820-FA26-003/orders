@@ -25,8 +25,13 @@ spec:
             - until pg_isready -h postgres -p 5432 -U postgres -d orders; do sleep 2; done
       containers:
         - name: orders
-          image: cluster-registry:5000/orders:1.0
+          image: localhost:5000/orders:1.0
           imagePullPolicy: Always
+          lifecycle:
+            preStop:
+              exec:
+                # Keep serving while Traefik removes this terminating endpoint.
+                command: ["sh", "-c", "sleep 5"]
           ports:
             - name: http
               containerPort: 8080

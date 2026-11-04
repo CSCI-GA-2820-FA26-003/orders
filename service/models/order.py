@@ -130,6 +130,15 @@ class Order(db.Model, PersistentBase):
     ##################################################
 
     @classmethod
+    def find_by_status(cls, status: OrderStatus, customer_id: int = None):
+        """Returns Orders matching a status and, optionally, a customer."""
+        logger.info("Processing status query for %s ...", status)
+        query = cls.query.filter(cls.status == status)
+        if customer_id is not None:
+            query = query.filter(cls.customer_id == customer_id)
+        return query.all()
+
+    @classmethod
     def find_by_customer_id(cls, customer_id: int):
         """Returns all Orders placed by the given customer
 

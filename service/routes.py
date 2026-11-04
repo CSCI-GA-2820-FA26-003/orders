@@ -182,10 +182,20 @@ def update_order_item(order_id, item_id):
 ######################################################################
 # LIST ALL ORDERS
 ######################################################################
+def validate_order_query_parameters():
+    """Reject unsupported or repeated order collection query parameters."""
+    for parameter in request.args:
+        if parameter not in {"customer_id", "status"}:
+            abort(status.HTTP_400_BAD_REQUEST, description=f"Unsupported query parameter [{parameter}]")
+        if len(request.args.getlist(parameter)) != 1:
+            abort(status.HTTP_400_BAD_REQUEST, description=f"Query parameter [{parameter}] must appear once")
+
+
 @app.route("/orders", methods=["GET"])
 def list_orders():
-    """Returns all of the Orders, optionally filtered by customer_id"""
+    """Returns Orders, optionally filtered by customer_id and status."""
     app.logger.info("Request for order list")
+    validate_order_query_parameters()
 
     customer_id = request.args.get("customer_id")
     if customer_id is not None:
@@ -197,6 +207,15 @@ def list_orders():
                 description=f"customer_id must be an integer, not [{customer_id}]",
             )
         app.logger.info("Filtering orders by customer_id: %s", customer_id)
+
+    status_value = request.args.get("status")
+    if status_value is not None:
+        try:
+            order_status = OrderStatus[status_value.upper()]
+        except KeyError:
+            abort(status.HTTP_400_BAD_REQUEST, description=f"Invalid order status [{status_value}]")
+        orders = Order.find_by_status(order_status, customer_id=customer_id)
+    elif customer_id is not None:
         orders = Order.find_by_customer_id(customer_id)
     else:
         orders = Order.all()
