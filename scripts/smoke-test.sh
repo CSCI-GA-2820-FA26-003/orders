@@ -10,7 +10,7 @@ order_id=
 cleanup() {
     if [[ -n "$order_id" ]]; then
         curl --silent --show-error --fail --max-time 10 --request DELETE \
-            "$BASE_URL/orders/$order_id" > /dev/null || true
+            "$BASE_URL/api/orders/$order_id" > /dev/null || true
     fi
     rm -f "$response_file"
 }
@@ -28,7 +28,7 @@ status_code=$(curl --silent --show-error --max-time 30 \
     --output "$response_file" --write-out '%{http_code}' \
     --header 'Content-Type: application/json' \
     --data '{"customer_id":2820,"items":[{"product_id":60,"quantity":2,"unit_price":12.50}]}' \
-    "$BASE_URL/orders")
+    "$BASE_URL/api/orders")
 [[ "$status_code" == "201" ]] || { cat "$response_file"; exit 1; }
 order_id=$(jq --exit-status '.id | select(type == "number" and . > 0 and . == floor)' "$response_file")
 jq --exit-status '.customer_id == 2820 and .status == "NEW" and .subtotal == 25 and (.items | length) == 1' "$response_file"
@@ -43,6 +43,6 @@ saved_item=$("${kubectl_command[@]}" exec postgres-0 -- \
     --command="SELECT count(*) FROM item WHERE order_id = $order_id AND product_id = 60 AND quantity = 2 AND unit_price = 12.50;")
 [[ "$saved_item" == "1" ]]
 
-curl --silent --show-error --fail --max-time 10 "$BASE_URL/orders/$order_id" \
+curl --silent --show-error --fail --max-time 10 "$BASE_URL/api/orders/$order_id" \
     | jq --exit-status --argjson id "$order_id" '.id == $id and .customer_id == 2820 and .subtotal == 25'
 echo "Ingress health, order creation, and PostgreSQL persistence passed."
