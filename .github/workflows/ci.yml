@@ -37,6 +37,13 @@ jobs:
       DATABASE_URI: "postgresql+psycopg://postgres:pgs3cr3t@postgres:5432/testdb"
 
     steps:
+      # git is needed so checkout makes a real clone (Codecov reads commit info
+      # from it); curl and gnupg are needed by the Codecov uploader
+      - name: Install system packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git curl gnupg ca-certificates
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -54,9 +61,16 @@ jobs:
         run: pylint service tests --max-line-length=127
 
       - name: Run unit tests with pytest
-        run: pytest --pspec --cov=service --cov-fail-under=95 --disable-warnings
+        run: pytest --pspec --cov=service --cov-fail-under=95 --cov-report=xml --disable-warnings
         env:
           RETRY_COUNT: 1
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: true
 
   deploy:
     name: Local K3s deployment
