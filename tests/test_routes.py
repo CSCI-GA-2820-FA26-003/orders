@@ -72,26 +72,12 @@ class TestOrderService(TestCase):
     ######################################################################
 
     def test_index(self):
-        """It should call the home page"""
+        """It should serve the Orders admin page"""
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.content_type, "application/json")
-
-    def test_index_service_information(self):
-        """It should describe the service and its version as JSON"""
-        data = self.client.get("/").get_json()
-        self.assertIsInstance(data, dict)
-        self.assertEqual(data["name"], "Orders Service")
-        self.assertEqual(data["version"], "1.0.0")
-
-    def test_index_orders_endpoint(self):
-        """It should advertise the existing Orders collection endpoint"""
-        data = self.client.get("/").get_json()
-        self.assertIsInstance(data, dict)
-        self.assertEqual(data["endpoints"]["orders"], "/orders")
-        resp = self.client.get(data["endpoints"]["orders"])
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIsInstance(resp.get_json(), list)
+        self.assertIn("text/html", resp.content_type)
+        self.assertIn(b"<h1>Orders</h1>", resp.data)
+        resp.close()
 
     ######################################################################
     #  C R E A T E   A N   O R D E R

@@ -32,15 +32,8 @@ from service.common import status  # HTTP Status Codes
 ######################################################################
 @app.route("/")
 def index():
-    """Returns the service name, version, and Orders collection endpoint"""
-    return (
-        jsonify(
-            name="Orders Service",
-            version="1.0.0",
-            endpoints={"orders": url_for("list_orders")},
-        ),
-        status.HTTP_200_OK,
-    )
+    """Serves the Orders admin page"""
+    return app.send_static_file("index.html")
 
 
 ######################################################################
