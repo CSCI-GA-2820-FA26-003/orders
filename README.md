@@ -16,8 +16,9 @@ a quantity, and a unit price). The service is built with Flask and SQLAlchemy an
 stores its data in PostgreSQL.
 
 The `/service` folder contains the `models` package with the `Order` and `Item`
-models, and `routes.py` with the REST API. The `/tests` folder contains test suites
-for the models and the routes.
+models, `routes.py` with the REST API, and `static` with the admin page. The `/tests`
+folder contains test suites for the models and the routes, and the `/features` folder
+contains the browser tests for the admin page.
 
 ## Prerequisites
 
@@ -274,6 +275,29 @@ local clone in a browser (or right-click it in the VSCode Explorer and choose
 **Reveal in File Explorer** / **Reveal in Finder**). Click a file to see its
 uncovered lines highlighted.
 
+## Running the BDD Tests
+
+The BDD tests open the admin page in a headless Chrome browser using Selenium. Run them
+in the dev container, because its image includes Chrome and the driver. Rebuild the dev
+container once so that it picks up the image and the new packages.
+
+Start the service in one terminal:
+
+```bash
+make run
+```
+
+Run the tests in a second terminal:
+
+```bash
+behave
+```
+
+The tests read the service URL from `BASE_URL`, which defaults to
+`http://localhost:8080`, and wait up to `WAIT_SECONDS` for each page element. Put
+scenarios in `features/orders.feature` and step definitions in `features/steps/`.
+Scenarios use the web page only, with no direct calls to the service or the database.
+
 ## Data Model
 
 ### Order
@@ -305,7 +329,7 @@ uncovered lines highlighted.
 
 | Method   | URI                                     | Description                     | Success          |
 | -------- | --------------------------------------- | ------------------------------- | ---------------- |
-| `GET`    | `/`                                     | Service information             | `200 OK`         |
+| `GET`    | `/`                                     | Orders admin page               | `200 OK`         |
 | `POST`   | `/orders`                               | Create an Order                 | `201 Created`    |
 | `GET`    | `/orders`                               | List all Orders                 | `200 OK`         |
 | `GET`    | `/orders/{order_id}`                    | Read an Order by id             | `200 OK`         |
@@ -346,22 +370,10 @@ Every response, including errors, carries an `X-Request-ID` header. If the clien
 sends an `X-Request-ID` header it is echoed back; otherwise the service generates a
 UUID.
 
-### Service information
+### Admin page
 
-```bash
-curl -i http://localhost:8080/
-```
-
-`GET /` returns **200 OK** with the service name, version, and the URI of the
-Orders collection:
-
-```json
-{
-  "name": "Orders Service",
-  "version": "1.0.0",
-  "endpoints": {"orders": "/orders"}
-}
-```
+`GET /` returns **200 OK** with the Orders admin page as HTML. The REST API routes
+below are unchanged.
 
 ### Create an order
 
@@ -585,6 +597,8 @@ service/                     - service python package
 ├── __init__.py              - package initializer
 ├── config.py                - configuration parameters
 ├── routes.py                - module with service routes
+├── static                   - Orders admin page
+│   └── index.html           - admin page HTML
 ├── models                   - business models package
 │   ├── __init__.py          - package initializer
 │   ├── persistent_base.py   - shared database persistence methods
@@ -604,6 +618,12 @@ tests/                       - test cases package
 ├── test_order.py            - test suite for the Order model
 ├── test_item.py             - test suite for the Item model
 └── test_routes.py           - test suite for service routes
+
+features/                    - BDD tests for the admin page
+├── environment.py           - starts and closes the browser
+├── orders.feature           - admin page scenarios
+└── steps
+    └── web_steps.py         - Selenium step definitions
 ```
 
 ## License
