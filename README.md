@@ -297,6 +297,19 @@ The tests read the service URL from `BASE_URL`, which defaults to
 `http://localhost:8080`, and wait up to `WAIT_SECONDS` for each page element. Put
 scenarios in `features/orders.feature` and step definitions in `features/steps/`.
 Scenarios use the web page only, with no direct calls to the service or the database.
+Use a separate, disposable test service/database: order scenarios create their own
+orders through the page. Set `CHROME_BINARY` if Chrome is installed in a custom location.
+
+## Correcting an Order in the Browser
+
+Open `http://localhost:8080/`. Create an order with a customer ID and optional item,
+then use **Find order** to select it by ID. Change the customer ID or status and click
+**Save order**. A fresh lookup displays the saved change under the same ID; items,
+subtotal, and creation time are preserved. Failed lookups clear the selection and
+disable saving. Service errors are displayed on the page.
+
+This provides the minimal create/lookup controls needed to exercise story #75 on
+the current base. Delete and list controls belong to separate stories #76 and #77.
 
 ## Data Model
 
