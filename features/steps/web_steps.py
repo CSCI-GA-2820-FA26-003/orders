@@ -2,6 +2,9 @@
 Steps that use the Orders admin page through Selenium
 """
 
+# Behave registers these decorators dynamically.
+# pylint: disable=not-callable
+
 from behave import when, then  # pylint: disable=no-name-in-module
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
