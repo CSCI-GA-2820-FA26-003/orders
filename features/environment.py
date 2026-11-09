@@ -15,8 +15,6 @@ def before_all(context):
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--headless")
-    if getenv("CHROME_BINARY"):
-        options.binary_location = getenv("CHROME_BINARY")
     context.base_url = BASE_URL
     context.wait_seconds = WAIT_SECONDS
     context.driver = webdriver.Chrome(options=options)

@@ -4,65 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Orders Admin</title>
-  <link rel="stylesheet" href="/static/admin.css">
-  <script src="/static/admin.js" defer></script>
 </head>
-<body data-orders-url="/orders">
-<main>
+<body>
   <h1>Orders</h1>
-  <p>Create an order, look up its details, and save a correction.</p>
-  <p id="message" role="status" aria-live="polite"></p>
-
-  <section aria-labelledby="create-heading">
-    <h2 id="create-heading">New order</h2>
-    <form id="create-form">
-      <label>Customer ID <input id="create-customer-id" type="number" step="1" required></label>
-      <label>Status <select id="create-status">
-        <option>NEW</option><option>SHIPPED</option><option>DELIVERED</option><option>CANCELLED</option>
-      </select></label>
-      <fieldset>
-        <legend>Optional item — fill all three fields to include an item</legend>
-        <label>Product ID <input id="create-product-id" type="number" step="1"></label>
-        <label>Quantity <input id="create-quantity" type="number" min="1" max="999" step="1"></label>
-        <label>Unit price <input id="create-unit-price" type="number" min="0" max="99999999.99" step="0.01"></label>
-      </fieldset>
-      <button id="create-button" type="submit">Create order</button>
-    </form>
-  </section>
-
-  <section aria-labelledby="lookup-heading">
-    <h2 id="lookup-heading">Find and manage an order</h2>
-    <form id="lookup-form">
-      <label>Order ID <input id="lookup-id" type="number" min="1" step="1" required></label>
-      <button id="lookup-button" type="submit">Find order</button>
-    </form>
-    <p id="selection-hint">Look up an order to edit it.</p>
-    <div id="order-details" hidden>
-      <h3>Selected order #<span id="selected-id"></span></h3>
-      <dl>
-        <dt>Customer ID</dt><dd id="selected-customer-id"></dd>
-        <dt>Status</dt><dd id="selected-status"></dd>
-        <dt>Subtotal</dt><dd id="selected-subtotal"></dd>
-        <dt>Created</dt><dd id="selected-created-at"></dd>
-        <dt>Updated</dt><dd id="selected-updated-at"></dd>
-      </dl>
-      <h3>Items</h3>
-      <table>
-        <caption>Items in the selected order</caption>
-        <thead><tr><th>Item ID</th><th>Product ID</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead>
-        <tbody id="selected-items"></tbody>
-      </table>
-      <p id="no-items" hidden>This order has no items.</p>
-      <form id="edit-form">
-        <label>Customer ID <input id="edit-customer-id" type="number" step="1" required></label>
-        <label>Status <select id="edit-status">
-          <option>NEW</option><option>SHIPPED</option><option>DELIVERED</option><option>CANCELLED</option>
-        </select></label>
-        <button id="save-button" type="submit" disabled>Save order</button>
-      </form>
-    </div>
-  </section>
-
-</main>
 </body>
 </html>
