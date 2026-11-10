@@ -457,6 +457,19 @@ class TestOrder(TestCase):
         self.assertRaises(DataValidationError, order.deserialize, {"customer_id": "abc"})
         self.assertRaises(DataValidationError, order.deserialize, {"customer_id": True})
 
+    def test_deserialize_non_positive_customer_id(self):
+        """It should not Deserialize an Order with a zero or negative customer_id"""
+        for customer_id in (-1, 0):
+            with self.subTest(customer_id=customer_id):
+                order = Order()
+                self.assertRaises(DataValidationError, order.deserialize, {"customer_id": customer_id})
+                self.assertIsNone(order.customer_id)
+
+    def test_deserialize_smallest_customer_id(self):
+        """It should Deserialize an Order with a customer_id of 1"""
+        order = Order().deserialize({"customer_id": 1})
+        self.assertEqual(order.customer_id, 1)
+
     def test_deserialize_bad_status(self):
         """It should not Deserialize an Order with an unknown status"""
         order = Order()
