@@ -87,7 +87,7 @@ class TestOrderService(TestCase):
         """It should Create an Order"""
         payload = {"customer_id": 123}
 
-        resp = self.client.post("/orders", json=payload)
+        resp = self.client.post("/api/orders", json=payload)
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.content_type, "application/json")
@@ -97,25 +97,25 @@ class TestOrderService(TestCase):
         self.assertEqual(data["status"], "NEW")
         self.assertEqual(data["items"], [])
         self.assertEqual(
-            resp.headers["Location"], f"http://localhost/orders/{data['id']}"
+            resp.headers["Location"], f"http://localhost/api/orders/{data['id']}"
         )
         self.assertIsNotNone(Order.find(data["id"]))
 
     def test_create_order_without_customer_id(self):
         """It should not Create an Order without a customer ID"""
-        resp = self.client.post("/orders", json={})
+        resp = self.client.post("/api/orders", json={})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Order.all(), [])
 
     def test_create_order_with_invalid_customer_id(self):
         """It should not Create an Order with an invalid customer ID"""
-        resp = self.client.post("/orders", json={"customer_id": "invalid"})
+        resp = self.client.post("/api/orders", json={"customer_id": "invalid"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Order.all(), [])
 
     def test_create_order_with_boolean_customer_id(self):
         """It should not Create an Order with a boolean customer ID"""
-        resp = self.client.post("/orders", json={"customer_id": True})
+        resp = self.client.post("/api/orders", json={"customer_id": True})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Order.all(), [])
 
@@ -129,7 +129,7 @@ class TestOrderService(TestCase):
             ],
         }
 
-        resp = self.client.post("/orders", json=payload)
+        resp = self.client.post("/api/orders", json=payload)
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         data = resp.get_json()
@@ -142,7 +142,7 @@ class TestOrderService(TestCase):
     def test_create_order_with_invalid_items(self):
         """It should not Create an Order when Items is not a list"""
         resp = self.client.post(
-            "/orders", json={"customer_id": 123, "items": "invalid"}
+            "/api/orders", json={"customer_id": 123, "items": "invalid"}
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Order.all(), [])
@@ -150,7 +150,7 @@ class TestOrderService(TestCase):
     def test_create_order_with_malformed_json(self):
         """It should not Create an Order from malformed JSON"""
         resp = self.client.post(
-            "/orders", data='{"customer_id":', content_type="application/json"
+            "/api/orders", data='{"customer_id":', content_type="application/json"
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Order.all(), [])
@@ -158,7 +158,7 @@ class TestOrderService(TestCase):
     def test_create_order_without_json(self):
         """It should not Create an Order without JSON content"""
         resp = self.client.post(
-            "/orders", data="customer_id=123", content_type="text/plain"
+            "/api/orders", data="customer_id=123", content_type="text/plain"
         )
         self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         self.assertEqual(Order.all(), [])
@@ -180,7 +180,7 @@ class TestOrderService(TestCase):
         before, other_before = order.serialize(), other.serialize()
         db.session.remove()
 
-        resp = self.client.put(f"/orders/{order_id}/cancel")
+        resp = self.client.put(f"/api/orders/{order_id}/cancel")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -190,8 +190,8 @@ class TestOrderService(TestCase):
         for field in ("id", "customer_id", "created_at", "items", "subtotal"):
             self.assertEqual(data[field], before[field])
         db.session.remove()
-        self.assertEqual(self.client.get(f"/orders/{order_id}").get_json(), data)
-        self.assertEqual(self.client.get(f"/orders/{other_id}").get_json(), other_before)
+        self.assertEqual(self.client.get(f"/api/orders/{order_id}").get_json(), data)
+        self.assertEqual(self.client.get(f"/api/orders/{other_id}").get_json(), other_before)
 
     def test_cancel_already_cancelled_order(self):
         """It should keep a cancelled Order and its timestamp unchanged on retries."""
@@ -203,12 +203,12 @@ class TestOrderService(TestCase):
         db.session.remove()
 
         for _ in range(2):
-            resp = self.client.put(f"/orders/{order_id}/cancel")
+            resp = self.client.put(f"/api/orders/{order_id}/cancel")
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
             self.assertEqual(resp.content_type, "application/json")
             self.assertEqual(resp.get_json(), before)
             db.session.remove()
-            self.assertEqual(self.client.get(f"/orders/{order_id}").get_json(), before)
+            self.assertEqual(self.client.get(f"/api/orders/{order_id}").get_json(), before)
 
     def test_cancel_rejects_fulfilled_orders(self):
         """It should return JSON 409 without modifying shipped or delivered Orders."""
@@ -220,7 +220,7 @@ class TestOrderService(TestCase):
                 order_id, before = order.id, order.serialize()
                 db.session.remove()
 
-                resp = self.client.put(f"/orders/{order_id}/cancel")
+                resp = self.client.put(f"/api/orders/{order_id}/cancel")
 
                 self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
                 self.assertEqual(resp.content_type, "application/json")
@@ -230,7 +230,7 @@ class TestOrderService(TestCase):
                 self.assertEqual(error["error"], "Conflict")
                 self.assertIn(order_status.name, error["message"])
                 db.session.remove()
-                self.assertEqual(self.client.get(f"/orders/{order_id}").get_json(), before)
+                self.assertEqual(self.client.get(f"/api/orders/{order_id}").get_json(), before)
 
     def test_cancel_missing_order(self):
         """It should return JSON 404 without creating or modifying any Order."""
@@ -241,7 +241,7 @@ class TestOrderService(TestCase):
         missing_id = order_id + 1
         db.session.remove()
 
-        resp = self.client.put(f"/orders/{missing_id}/cancel")
+        resp = self.client.put(f"/api/orders/{missing_id}/cancel")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.content_type, "application/json")
@@ -252,7 +252,7 @@ class TestOrderService(TestCase):
         self.assertIn(str(missing_id), error["message"])
         db.session.remove()
         self.assertEqual(len(Order.all()), 1)
-        self.assertEqual(self.client.get(f"/orders/{order_id}").get_json(), before)
+        self.assertEqual(self.client.get(f"/api/orders/{order_id}").get_json(), before)
 
     def test_cancel_empty_order(self):
         """It should cancel an empty Order and return a zero subtotal."""
@@ -261,7 +261,7 @@ class TestOrderService(TestCase):
         order_id = order.id
         db.session.remove()
 
-        resp = self.client.put(f"/orders/{order_id}/cancel")
+        resp = self.client.put(f"/api/orders/{order_id}/cancel")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
@@ -269,7 +269,7 @@ class TestOrderService(TestCase):
         self.assertEqual(data["items"], [])
         self.assertEqual(data["subtotal"], 0)
         db.session.remove()
-        self.assertEqual(self.client.get(f"/orders/{order_id}").get_json(), data)
+        self.assertEqual(self.client.get(f"/api/orders/{order_id}").get_json(), data)
 
     ######################################################################
     #  U P D A T E   A N   O R D E R
@@ -285,7 +285,7 @@ class TestOrderService(TestCase):
         db.session.remove()
 
         resp = self.client.put(
-            f"/orders/{order_id}",
+            f"/api/orders/{order_id}",
             json={"customer_id": 456, "status": "SHIPPED"},
         )
 
@@ -306,7 +306,7 @@ class TestOrderService(TestCase):
         db.session.remove()
 
         resp = self.client.put(
-            f"/orders/{order_id}",
+            f"/api/orders/{order_id}",
             json={"customer_id": 456},
         )
 
@@ -319,7 +319,7 @@ class TestOrderService(TestCase):
 
     def test_update_missing_order(self):
         """It should return a JSON 404 when the Order does not exist"""
-        resp = self.client.put("/orders/0", json={"customer_id": 456})
+        resp = self.client.put("/api/orders/0", json={"customer_id": 456})
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.content_type, "application/json")
@@ -334,7 +334,7 @@ class TestOrderService(TestCase):
         order.create()
 
         resp = self.client.put(
-            f"/orders/{order.id}", json={"customer_id": "invalid"}
+            f"/api/orders/{order.id}", json={"customer_id": "invalid"}
         )
 
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
@@ -347,7 +347,7 @@ class TestOrderService(TestCase):
         order.create()
 
         resp = self.client.put(
-            f"/orders/{order.id}",
+            f"/api/orders/{order.id}",
             data="customer_id=456",
             content_type="text/plain",
         )
@@ -372,7 +372,7 @@ class TestOrderService(TestCase):
     def test_list_all_orders(self):
         """It should list all Orders"""
         orders = self._create_orders(5)
-        resp = self.client.get("/orders")
+        resp = self.client.get("/api/orders")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
         self.assertIsInstance(data, list)
@@ -383,7 +383,7 @@ class TestOrderService(TestCase):
     def test_list_orders_contents(self):
         """It should return each Order as JSON with its Items"""
         order = self._create_orders(1)[0]
-        resp = self.client.get("/orders")
+        resp = self.client.get("/api/orders")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
         data = resp.get_json()
@@ -397,7 +397,7 @@ class TestOrderService(TestCase):
 
     def test_list_orders_empty(self):
         """It should return an empty list when there are no Orders"""
-        resp = self.client.get("/orders")
+        resp = self.client.get("/api/orders")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json(), [])
 
@@ -417,10 +417,10 @@ class TestOrderService(TestCase):
         for order_status in OrderStatus:
             for value in (order_status.name, order_status.name.lower(), order_status.name.title()):
                 with self.subTest(status=value):
-                    resp = self.client.get("/orders", query_string={"status": value})
+                    resp = self.client.get("/api/orders", query_string={"status": value})
                     self.assertEqual(resp.status_code, status.HTTP_200_OK)
                     self.assertEqual(resp.get_json(), [expected[order_status]])
-        self.assertEqual(len(self.client.get("/orders").get_json()), len(OrderStatus))
+        self.assertEqual(len(self.client.get("/api/orders").get_json()), len(OrderStatus))
 
     def test_query_orders_by_status_and_customer(self):
         """It should intersect status and customer filters, including customer zero."""
@@ -430,10 +430,10 @@ class TestOrderService(TestCase):
             order.create()
             if customer_id == 0 and order_status == OrderStatus.NEW:
                 expected = order.serialize()
-        resp = self.client.get("/orders?customer_id=0&status=NEW")
+        resp = self.client.get("/api/orders?customer_id=0&status=NEW")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json(), [expected])
-        resp = self.client.get("/orders?customer_id=1&status=SHIPPED")
+        resp = self.client.get("/api/orders?customer_id=1&status=SHIPPED")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json(), [])
 
@@ -442,7 +442,7 @@ class TestOrderService(TestCase):
         for populated in (False, True):
             if populated:
                 OrderFactory(status=OrderStatus.NEW).create()
-            resp = self.client.get("/orders?status=DELIVERED")
+            resp = self.client.get("/api/orders?status=DELIVERED")
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
             self.assertEqual(resp.get_json(), [])
 
@@ -457,7 +457,7 @@ class TestOrderService(TestCase):
             "customer_id=1&customer_id=2", "status=NEW&customer_id=abc",
         ):
             with self.subTest(query=query):
-                resp = self.client.get(f"/orders?{query}")
+                resp = self.client.get(f"/api/orders?{query}")
                 self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
                 self.assertEqual(resp.content_type, "application/json")
                 self.assertEqual(resp.get_json()["status"], 400)
@@ -473,7 +473,7 @@ class TestOrderService(TestCase):
             ItemFactory(order=order)
             order.create()
 
-        resp = self.client.get("/orders", query_string={"customer_id": 1})
+        resp = self.client.get("/api/orders", query_string={"customer_id": 1})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
         self.assertEqual(len(data), 2)
@@ -484,7 +484,7 @@ class TestOrderService(TestCase):
     def test_query_orders_by_customer_no_match(self):
         """It should return an empty list when the customer has no Orders"""
         self._create_orders(2)
-        resp = self.client.get("/orders?customer_id=0")
+        resp = self.client.get("/api/orders?customer_id=0")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json(), [])
 
@@ -492,7 +492,7 @@ class TestOrderService(TestCase):
         """It should return 400 when customer_id is not an integer"""
         self._create_orders(1)
         for customer_id in ["abc", "1.5", ""]:
-            resp = self.client.get("/orders", query_string={"customer_id": customer_id})
+            resp = self.client.get("/api/orders", query_string={"customer_id": customer_id})
             self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
             self.assertEqual(resp.content_type, "application/json")
             data = resp.get_json()
@@ -512,7 +512,7 @@ class TestOrderService(TestCase):
         order_id = order.id
         db.session.remove()
 
-        resp = self.client.get(f"/orders/{order_id}")
+        resp = self.client.get(f"/api/orders/{order_id}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
         data = resp.get_json()
@@ -533,7 +533,7 @@ class TestOrderService(TestCase):
         order = OrderFactory()
         order.create()
 
-        resp = self.client.get(f"/orders/{order.id}")
+        resp = self.client.get(f"/api/orders/{order.id}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
         self.assertEqual(data["id"], order.id)
@@ -541,7 +541,7 @@ class TestOrderService(TestCase):
 
     def test_read_order_not_found(self):
         """It should return a JSON 404 when the Order does not exist"""
-        resp = self.client.get("/orders/0")
+        resp = self.client.get("/api/orders/0")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.content_type, "application/json")
         data = resp.get_json()
@@ -551,7 +551,7 @@ class TestOrderService(TestCase):
 
     def test_create_order_location_can_be_read(self):
         """It should Read the new Order from the Location header after creating it"""
-        resp = self.client.post("/orders", json={"customer_id": 7})
+        resp = self.client.post("/api/orders", json={"customer_id": 7})
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         new_order = resp.get_json()
 
@@ -576,7 +576,7 @@ class TestOrderService(TestCase):
         other_item_ids = [item.id for item in other_order.items]
         db.session.remove()
 
-        resp = self.client.delete(f"/orders/{order_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
         db.session.remove()
@@ -594,7 +594,7 @@ class TestOrderService(TestCase):
         order_id = order.id
         db.session.remove()
 
-        resp = self.client.delete(f"/orders/{order_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
         db.session.remove()
@@ -606,7 +606,7 @@ class TestOrderService(TestCase):
         order = self._create_orders(1)[0]
         order_id, item_id = order.id, order.items[0].id
 
-        resp = self.client.delete("/orders/0")
+        resp = self.client.delete("/api/orders/0")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
         db.session.remove()
@@ -619,10 +619,10 @@ class TestOrderService(TestCase):
         order.create()
         order_id = order.id
 
-        resp = self.client.delete(f"/orders/{order_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
-        resp = self.client.delete(f"/orders/{order_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
         self.assertIsNone(Order.find(order_id))
@@ -649,7 +649,7 @@ class TestOrderService(TestCase):
         self.assertEqual(order.subtotal, Decimal("29.25"))
         db.session.remove()
 
-        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/{item_id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
         db.session.remove()
@@ -668,7 +668,7 @@ class TestOrderService(TestCase):
         order_id, item_id = order.id, order.items[0].id
         db.session.remove()
 
-        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/{item_id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
         db.session.remove()
@@ -684,7 +684,7 @@ class TestOrderService(TestCase):
         order_id, item_id = order.id, order.items[0].id
         data = order.serialize()
 
-        resp = self.client.delete(f"/orders/0/items/{item_id}")
+        resp = self.client.delete(f"/api/orders/0/items/{item_id}")
         self._assert_no_content(resp)
         db.session.remove()
         self.assertEqual(Order.find(order_id).serialize(), data)
@@ -697,7 +697,7 @@ class TestOrderService(TestCase):
         missing_item_id = order.items[0].id + 100000
         data = order.serialize()
 
-        resp = self.client.delete(f"/orders/{order_id}/items/{missing_item_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/{missing_item_id}")
         self._assert_no_content(resp)
         db.session.remove()
         self.assertEqual(Order.find(order_id).serialize(), data)
@@ -710,7 +710,7 @@ class TestOrderService(TestCase):
         item_id = other_order.items[0].id
         data, other_data = order.serialize(), other_order.serialize()
 
-        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/{item_id}")
         self._assert_no_content(resp)
         db.session.remove()
         self.assertEqual(Order.find(order_id).serialize(), data)
@@ -721,11 +721,11 @@ class TestOrderService(TestCase):
         """It should return 204 on repeated deletion and keep the Order"""
         order = self._create_orders(1)[0]
         order_id, item_id = order.id, order.items[0].id
-        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/{item_id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
 
-        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/{item_id}")
         self._assert_no_content(resp)
         db.session.remove()
         self.assertIsNotNone(Order.find(order_id))
@@ -747,7 +747,7 @@ class TestOrderService(TestCase):
         order_id = order.id
         before = order.serialize()
         item_count = len(Item.all())
-        resp = self.client.post(f"/orders/{order_id}/items", **kwargs)
+        resp = self.client.post(f"/api/orders/{order_id}/items", **kwargs)
         self.assertEqual(resp.status_code, expected_status)
         self.assertEqual(resp.content_type, "application/json")
         self.assertEqual(resp.get_json()["status"], expected_status)
@@ -775,7 +775,7 @@ class TestOrderService(TestCase):
                 existing_ids = [item.id for item in order.items]
                 db.session.remove()
                 payload = {"product_id": 456, "quantity": 3, "unit_price": 4.25}
-                resp = self.client.post(f"/orders/{order_id}/items", json=payload)
+                resp = self.client.post(f"/api/orders/{order_id}/items", json=payload)
                 self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
                 self.assertEqual(resp.content_type, "application/json")
                 data = resp.get_json()
@@ -783,7 +783,7 @@ class TestOrderService(TestCase):
                 self.assertEqual(data, dict(payload, id=data["id"], order_id=order_id, line_total=12.75))
                 self.assertEqual(
                     resp.headers["Location"],
-                    f"http://localhost/orders/{order_id}/items/{data['id']}",
+                    f"http://localhost/api/orders/{order_id}/items/{data['id']}",
                 )
                 db.session.remove()
                 self.assertEqual(Item.find(data["id"]).serialize(), data)
@@ -791,7 +791,7 @@ class TestOrderService(TestCase):
                 self.assertEqual([item.id for item in saved.items], existing_ids + [data["id"]])
                 self.assertEqual(saved.status, OrderStatus.NEW)
                 self.assertEqual(saved.subtotal, Decimal("29.25" if has_existing_item else "12.75"))
-                listed = self.client.get("/orders").get_json()
+                listed = self.client.get("/api/orders").get_json()
                 returned = next(entry for entry in listed if entry["id"] == order_id)
                 self.assertEqual(returned, saved.serialize())
 
@@ -832,7 +832,7 @@ class TestOrderService(TestCase):
         before = order.serialize()
         order_id = order.id
         resp = self.client.post(
-            f"/orders/{order_id + 100000}/items",
+            f"/api/orders/{order_id + 100000}/items",
             json={"product_id": 456, "quantity": 2, "unit_price": 10.50},
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
@@ -891,7 +891,7 @@ class TestOrderService(TestCase):
         before, other_before = order.serialize(), other_order.serialize()
         db.session.remove()
 
-        resp = self.client.get(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.get(f"/api/orders/{order_id}/items/{item_id}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
         self.assertEqual(
@@ -911,7 +911,7 @@ class TestOrderService(TestCase):
         order_id, item_id = order.id, order.items[0].id
         before = order.serialize()
 
-        resp = self.client.get(f"/orders/0/items/{item_id}")
+        resp = self.client.get(f"/api/orders/0/items/{item_id}")
         self._assert_read_item_not_found(resp, "Order with id [0] was not found")
         db.session.remove()
         self.assertEqual(Order.find(order_id).serialize(), before)
@@ -922,7 +922,7 @@ class TestOrderService(TestCase):
         order_id = order.id
         before = order.serialize()
 
-        resp = self.client.get(f"/orders/{order_id}/items/0")
+        resp = self.client.get(f"/api/orders/{order_id}/items/0")
         self._assert_read_item_not_found(
             resp, f"Item with id [0] was not found in Order with id [{order_id}]"
         )
@@ -936,7 +936,7 @@ class TestOrderService(TestCase):
         order_id = order.id
         before = order.serialize()
 
-        resp = self.client.get(f"/orders/{order_id}/items/0")
+        resp = self.client.get(f"/api/orders/{order_id}/items/0")
         self._assert_read_item_not_found(
             resp, f"Item with id [0] was not found in Order with id [{order_id}]"
         )
@@ -950,7 +950,7 @@ class TestOrderService(TestCase):
         order_id, other_order_id, item_id = order.id, other_order.id, other_order.items[0].id
         before, other_before = order.serialize(), other_order.serialize()
 
-        resp = self.client.get(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.get(f"/api/orders/{order_id}/items/{item_id}")
         self._assert_read_item_not_found(
             resp, f"Item with id [{item_id}] was not found in Order with id [{order_id}]"
         )
@@ -973,7 +973,7 @@ class TestOrderService(TestCase):
         before, other_before = order.serialize(), other_order.serialize()
         db.session.remove()
 
-        resp = self.client.get(f"/orders/{order_id}/items")
+        resp = self.client.get(f"/api/orders/{order_id}/items")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -996,7 +996,7 @@ class TestOrderService(TestCase):
         self._create_orders(1)
         db.session.remove()
 
-        resp = self.client.get(f"/orders/{order_id}/items")
+        resp = self.client.get(f"/api/orders/{order_id}/items")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -1013,7 +1013,7 @@ class TestOrderService(TestCase):
         missing_id = order_id + 100000
         db.session.remove()
 
-        resp = self.client.get(f"/orders/{missing_id}/items")
+        resp = self.client.get(f"/api/orders/{missing_id}/items")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.content_type, "application/json")
@@ -1048,7 +1048,7 @@ class TestOrderService(TestCase):
         order_id, item_id, sibling_id = order.id, item.id, sibling.id
         db.session.remove()
 
-        resp = self.client.put(f"/orders/{order_id}/items/{item_id}", json={"quantity": 5})
+        resp = self.client.put(f"/api/orders/{order_id}/items/{item_id}", json={"quantity": 5})
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -1069,7 +1069,7 @@ class TestOrderService(TestCase):
         order.create()
 
         resp = self.client.put(
-            f"/orders/{order.id}/items/{item.id}",
+            f"/api/orders/{order.id}/items/{item.id}",
             json={"quantity": 3, "unit_price": "2.50"},
         )
 
@@ -1089,7 +1089,7 @@ class TestOrderService(TestCase):
         db.session.remove()
 
         resp = self.client.put(
-            f"/orders/{order_id}/items/{item_id}", json={"unit_price": "3.50"}
+            f"/api/orders/{order_id}/items/{item_id}", json={"unit_price": "3.50"}
         )
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -1105,7 +1105,7 @@ class TestOrderService(TestCase):
 
     def test_update_missing_order_item(self):
         """It should return 404 when the parent Order does not exist"""
-        resp = self.client.put("/orders/0/items/1", json={"quantity": 2})
+        resp = self.client.put("/api/orders/0/items/1", json={"quantity": 2})
         self._assert_update_item_not_found(resp, "Order with id [0] was not found")
 
     def test_update_missing_item(self):
@@ -1113,7 +1113,7 @@ class TestOrderService(TestCase):
         order = OrderFactory()
         order.create()
 
-        resp = self.client.put(f"/orders/{order.id}/items/0", json={"quantity": 2})
+        resp = self.client.put(f"/api/orders/{order.id}/items/0", json={"quantity": 2})
         self._assert_update_item_not_found(
             resp, f"Item with id [0] was not found in Order with id [{order.id}]"
         )
@@ -1125,7 +1125,7 @@ class TestOrderService(TestCase):
         item = other_order.items[0]
         before = item.quantity
 
-        resp = self.client.put(f"/orders/{order.id}/items/{item.id}", json={"quantity": 9})
+        resp = self.client.put(f"/api/orders/{order.id}/items/{item.id}", json={"quantity": 9})
         self._assert_update_item_not_found(
             resp, f"Item with id [{item.id}] was not found in Order with id [{order.id}]"
         )
@@ -1138,7 +1138,7 @@ class TestOrderService(TestCase):
         item = ItemFactory(order=order, quantity=2, unit_price=Decimal("8.25"))
         order.create()
 
-        resp = self.client.put(f"/orders/{order.id}/items/{item.id}", json={"quantity": 0})
+        resp = self.client.put(f"/api/orders/{order.id}/items/{item.id}", json={"quantity": 0})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         db.session.remove()
         found = Item.find(item.id)
@@ -1173,7 +1173,7 @@ class TestOrderService(TestCase):
         for body in invalid_bodies:
             with self.subTest(body=body):
                 resp = self.client.put(
-                    f"/orders/{order_id}/items/{item_id}", json=body
+                    f"/api/orders/{order_id}/items/{item_id}", json=body
                 )
                 self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
                 self.assertEqual(Item.find(item_id).serialize(), before)
@@ -1187,7 +1187,7 @@ class TestOrderService(TestCase):
         order.create()
         before = item.serialize()
 
-        resp = self.client.put(f"/orders/{order.id}/items/{item.id}", json={"order_id": 999})
+        resp = self.client.put(f"/api/orders/{order.id}/items/{item.id}", json={"order_id": 999})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         db.session.remove()
         self.assertEqual(Item.find(item.id).serialize(), before)
@@ -1199,7 +1199,7 @@ class TestOrderService(TestCase):
         order.create()
 
         resp = self.client.put(
-            f"/orders/{order.id}/items/{item.id}",
+            f"/api/orders/{order.id}/items/{item.id}",
             data="quantity=2",
             content_type="text/plain",
         )
@@ -1212,7 +1212,7 @@ class TestOrderService(TestCase):
         order.create()
 
         resp = self.client.put(
-            f"/orders/{order.id}/items/{item.id}",
+            f"/api/orders/{order.id}/items/{item.id}",
             data='{"quantity":',
             content_type="application/json",
         )

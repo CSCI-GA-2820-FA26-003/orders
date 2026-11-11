@@ -162,13 +162,13 @@ The health request goes through ingress and returns **200 OK** with
 Create an order through the same ingress:
 
 ```bash
-curl -i http://localhost:8080/orders \
+curl -i http://localhost:8080/api/orders \
   -H 'Content-Type: application/json' \
   -d '{"customer_id":42,"items":[{"product_id":789,"quantity":2,"unit_price":12.50}]}'
 ```
 
 Expect **201 Created**. Read it back using the returned `id` with
-`GET /orders/<id>`. The Kubernetes service stores orders in the `orders` database
+`GET /api/orders/<id>`. The Kubernetes service stores orders in the `orders` database
 in the PostgreSQL StatefulSet; this is separate from the dev container's Compose
 database. The StatefulSet's persistent volume preserves data across pod restarts.
 The credentials in [k8s/postgres/secret.yaml](k8s/postgres/secret.yaml) are for
@@ -318,29 +318,33 @@ Scenarios use the web page only, with no direct calls to the service or the data
 | ------------ | ------- | ----------------------------------------------------------- |
 | `id`         | integer | Read-only, assigned by the service                          |
 | `order_id`   | integer | Read-only, the Order this Item belongs to                   |
-| `product_id` | integer | **Required**; must be positive for `POST /orders/{order_id}/items` |
+| `product_id` | integer | **Required**; must be positive for `POST /api/orders/{order_id}/items` |
 | `quantity`   | integer | **Required**, between 1 and 999                             |
 | `unit_price` | number  | **Required**, between 0 and 99999999.99, at most 2 decimals |
 | `line_total` | number  | Read-only, computed as `quantity × unit_price`              |
 
 ## API Reference
 
+Orders and Item API routes start with `/api/orders`. Update clients to use
+these URLs; the former `/orders` URLs return JSON 404. The admin page stays
+at `/`, and the database-independent health endpoint stays at `/health`.
+
 ### Routes summary
 
 | Method   | URI                                     | Description                     | Success          |
 | -------- | --------------------------------------- | ------------------------------- | ---------------- |
 | `GET`    | `/`                                     | Orders admin page               | `200 OK`         |
-| `POST`   | `/orders`                               | Create an Order                 | `201 Created`    |
-| `GET`    | `/orders`                               | List all Orders                 | `200 OK`         |
-| `GET`    | `/orders/{order_id}`                    | Read an Order by id             | `200 OK`         |
-| `PUT`    | `/orders/{order_id}`                    | Update an Order                 | `200 OK`         |
-| `PUT`    | `/orders/{order_id}/cancel`             | Cancel an unshipped Order        | `200 OK`         |
-| `DELETE` | `/orders/{order_id}`                    | Delete an Order and its Items   | `204 No Content` |
-| `POST`   | `/orders/{order_id}/items`              | Add an Item to an Order         | `201 Created`    |
-| `GET`    | `/orders/{order_id}/items`              | List all Items in an Order      | `200 OK`         |
-| `GET`    | `/orders/{order_id}/items/{item_id}`    | Read an Item from an Order      | `200 OK`         |
-| `PUT`    | `/orders/{order_id}/items/{item_id}`    | Update an Item in an Order      | `200 OK`         |
-| `DELETE` | `/orders/{order_id}/items/{item_id}`    | Delete an Item from an Order    | `204 No Content` |
+| `POST`   | `/api/orders`                               | Create an Order                 | `201 Created`    |
+| `GET`    | `/api/orders`                               | List all Orders                 | `200 OK`         |
+| `GET`    | `/api/orders/{order_id}`                    | Read an Order by id             | `200 OK`         |
+| `PUT`    | `/api/orders/{order_id}`                    | Update an Order                 | `200 OK`         |
+| `PUT`    | `/api/orders/{order_id}/cancel`             | Cancel an unshipped Order        | `200 OK`         |
+| `DELETE` | `/api/orders/{order_id}`                    | Delete an Order and its Items   | `204 No Content` |
+| `POST`   | `/api/orders/{order_id}/items`              | Add an Item to an Order         | `201 Created`    |
+| `GET`    | `/api/orders/{order_id}/items`              | List all Items in an Order      | `200 OK`         |
+| `GET`    | `/api/orders/{order_id}/items/{item_id}`    | Read an Item from an Order      | `200 OK`         |
+| `PUT`    | `/api/orders/{order_id}/items/{item_id}`    | Update an Item in an Order      | `200 OK`         |
+| `DELETE` | `/api/orders/{order_id}/items/{item_id}`    | Delete an Item from an Order    | `204 No Content` |
 
 ### Error responses
 
@@ -378,17 +382,17 @@ below are unchanged.
 ### Create an order
 
 ```bash
-curl -i -X POST http://localhost:8080/orders \
+curl -i -X POST http://localhost:8080/api/orders \
   -H "Content-Type: application/json" \
   -d '{"customer_id": 42, "items": [{"product_id": 789, "quantity": 2, "unit_price": 12.50}]}'
 ```
 
-`POST /orders` creates a new Order, along with any `items` included in the body.
+`POST /api/orders` creates a new Order, along with any `items` included in the body.
 `status` defaults to `NEW` when omitted.
 
 - **201 Created:** The body contains the new Order (including its `id`, computed
   `subtotal`, and Items), and the `Location` header holds the Order's URI,
-  e.g. `http://localhost:8080/orders/123`.
+  e.g. `http://localhost:8080/api/orders/123`.
 - **400 Bad Request:** `customer_id` is missing or not an integer, `status` is not
   a valid value, or an Item is invalid.
 - **415 Unsupported Media Type:** The `Content-Type` is not `application/json`.
@@ -396,16 +400,16 @@ curl -i -X POST http://localhost:8080/orders \
 ### List all orders
 
 ```bash
-curl -i http://localhost:8080/orders
+curl -i http://localhost:8080/api/orders
 ```
 
-`GET /orders` returns **200 OK** with an array of every Order, each including its
+`GET /api/orders` returns **200 OK** with an array of every Order, each including its
 Items. Returns `[]` when there are no Orders.
 
 To list only one customer's Orders, add the `customer_id` query string:
 
 ```bash
-curl -i "http://localhost:8080/orders?customer_id=42"
+curl -i "http://localhost:8080/api/orders?customer_id=42"
 ```
 
 - **200 OK:** An array of the customer's Orders, or `[]` if they have none.
@@ -415,8 +419,8 @@ Use `status` to filter by `NEW`, `SHIPPED`, `DELIVERED`, or `CANCELLED`
 (case-insensitive). Combine it with `customer_id` to match both filters:
 
 ```bash
-curl -i "http://localhost:8080/orders?status=NEW"
-curl -i "http://localhost:8080/orders?customer_id=42&status=new"
+curl -i "http://localhost:8080/api/orders?status=NEW"
+curl -i "http://localhost:8080/api/orders?customer_id=42&status=new"
 ```
 
 Matching Orders use the same JSON array format, including Items. No matches
@@ -427,10 +431,10 @@ return `200 OK` with `[]`; omitting filters returns all Orders. Invalid statuses
 ### Read an order
 
 ```bash
-curl -i http://localhost:8080/orders/123
+curl -i http://localhost:8080/api/orders/123
 ```
 
-`GET /orders/{order_id}` returns **200 OK** with the Order and all of its Items:
+`GET /api/orders/{order_id}` returns **200 OK** with the Order and all of its Items:
 
 ```json
 {
@@ -452,12 +456,12 @@ Order does not modify it.
 ### Update an order
 
 ```bash
-curl -i -X PUT http://localhost:8080/orders/123 \
+curl -i -X PUT http://localhost:8080/api/orders/123 \
   -H "Content-Type: application/json" \
   -d '{"customer_id": 42, "status": "SHIPPED"}'
 ```
 
-`PUT /orders/{order_id}` updates an existing Order. The body must include
+`PUT /api/orders/{order_id}` updates an existing Order. The body must include
 `customer_id`. If `status` is omitted, the Order keeps its current status. If
 `items` is included, it replaces the Order's current Items; otherwise the existing
 Items are kept.
@@ -471,10 +475,10 @@ Items are kept.
 ### Cancel an order
 
 ```bash
-curl -i -X PUT http://localhost:8080/orders/123/cancel
+curl -i -X PUT http://localhost:8080/api/orders/123/cancel
 ```
 
-`PUT /orders/{order_id}/cancel` is a stateful Action. It requires no request body
+`PUT /api/orders/{order_id}/cancel` is a stateful Action. It requires no request body
 or `Content-Type` header.
 
 - **200 OK:** A `NEW` Order is saved with status `CANCELLED`, and the response
@@ -491,7 +495,7 @@ or `Content-Type` header.
 ### Delete an order
 
 ```bash
-curl -i -X DELETE http://localhost:8080/orders/123
+curl -i -X DELETE http://localhost:8080/api/orders/123
 ```
 
 - **204 No Content:** The Order and all associated Items are deleted in the same
@@ -503,18 +507,18 @@ curl -i -X DELETE http://localhost:8080/orders/123
 ### Add an item to an order
 
 ```bash
-curl -i -X POST http://localhost:8080/orders/123/items \
+curl -i -X POST http://localhost:8080/api/orders/123/items \
   -H "Content-Type: application/json" \
   -d '{"product_id": 789, "quantity": 2, "unit_price": 12.50}'
 ```
 
-`POST /orders/{order_id}/items` adds an Item to the Order and recomputes the
+`POST /api/orders/{order_id}/items` adds an Item to the Order and recomputes the
 Order's `subtotal`. The body must contain `product_id`, `quantity`, and
 `unit_price`; the read-only fields `id`, `order_id`, and `line_total` must not be
 sent.
 
 - **201 Created:** The body contains the new Item, and the `Location` header holds
-  the Item's URI, e.g. `http://localhost:8080/orders/123/items/456`.
+  the Item's URI, e.g. `http://localhost:8080/api/orders/123/items/456`.
 - **400 Bad Request:** A field is missing or invalid, or a read-only field was sent.
 - **404 Not Found:** The Order does not exist.
 - **409 Conflict:** The Order's status is not `NEW`, so it can no longer be modified.
@@ -523,10 +527,10 @@ sent.
 ### List all items in an order
 
 ```bash
-curl -i http://localhost:8080/orders/123/items
+curl -i http://localhost:8080/api/orders/123/items
 ```
 
-`GET /orders/{order_id}/items` returns **200 OK** with an array of all Items
+`GET /api/orders/{order_id}/items` returns **200 OK** with an array of all Items
 belonging to that Order. Existing Orders with no Items return `[]`. Missing Orders
 return **404 Not Found**. Listing Items does not change any data or include Items
 belonging to other Orders.
@@ -534,10 +538,10 @@ belonging to other Orders.
 ### Read an item from an order
 
 ```bash
-curl -i http://localhost:8080/orders/123/items/456
+curl -i http://localhost:8080/api/orders/123/items/456
 ```
 
-`GET /orders/{order_id}/items/{item_id}` returns **200 OK** with the Item:
+`GET /api/orders/{order_id}/items/{item_id}` returns **200 OK** with the Item:
 
 ```json
 {"id": 456, "order_id": 123, "product_id": 789, "quantity": 2, "unit_price": 12.5, "line_total": 25.0}
@@ -550,12 +554,12 @@ or any Items.
 ### Update an item in an order
 
 ```bash
-curl -i -X PUT http://localhost:8080/orders/123/items/456 \
+curl -i -X PUT http://localhost:8080/api/orders/123/items/456 \
   -H "Content-Type: application/json" \
   -d '{"quantity": 3}'
 ```
 
-`PUT /orders/{order_id}/items/{item_id}` partially updates an Item. Only
+`PUT /api/orders/{order_id}/items/{item_id}` partially updates an Item. Only
 `quantity` and/or `unit_price` may be sent; fields not supplied keep their current
 values, and `line_total` and the Order's `subtotal` reflect the new values.
 
@@ -570,7 +574,7 @@ values, and `line_total` and the Order's `subtotal` reflect the new values.
 ### Delete an item from an order
 
 ```bash
-curl -i -X DELETE http://localhost:8080/orders/123/items/456
+curl -i -X DELETE http://localhost:8080/api/orders/123/items/456
 ```
 
 - **204 No Content:** Only the specified Item belonging to this Order is deleted,
