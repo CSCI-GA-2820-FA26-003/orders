@@ -154,7 +154,7 @@ class TestErrorHandlers(TestCase):
         for error, error_name, header, value in cases:
             with self.subTest(status=error.code):
                 with patch("service.routes.Order.find", side_effect=error):
-                    resp = self.client.delete("/orders/123", headers={"X-Request-ID": "http-error-test"})
+                    resp = self.client.delete("/api/orders/123", headers={"X-Request-ID": "http-error-test"})
                 self._assert_error((resp, resp.status_code), error.code, error_name, str(error))
                 self.assertEqual(resp.headers["X-Request-ID"], "http-error-test")
                 if header:
@@ -167,7 +167,7 @@ class TestErrorHandlers(TestCase):
             with self.subTest(retry_after=retry_after):
                 error = ServiceUnavailable(description="private database failure", retry_after=retry_after)
                 with patch("service.routes.Order.find", side_effect=error):
-                    resp = self.client.delete("/orders/123")
+                    resp = self.client.delete("/api/orders/123")
                 self._assert_error(
                     (resp, resp.status_code), 503, "Service Unavailable", "The service is temporarily unavailable."
                 )
@@ -177,13 +177,13 @@ class TestErrorHandlers(TestCase):
     def test_unexpected_exception_returns_safe_500(self):
         """It should return a safe JSON 500 for unexpected server exceptions."""
         with patch("service.routes.Order.find", side_effect=RuntimeError("private database failure")):
-            resp = self.client.delete("/orders/123")
+            resp = self.client.delete("/api/orders/123")
         self._assert_error((resp, resp.status_code), 500, "Internal Server Error", "An unexpected error occurred.")
         self.assertNotIn("private database failure", resp.get_data(as_text=True))
 
     def test_unhandled_server_http_error_is_safe(self):
         """It should preserve other server HTTP statuses without exposing internal details."""
         with patch("service.routes.Order.find", side_effect=BadGateway(description="private upstream details")):
-            resp = self.client.delete("/orders/123")
+            resp = self.client.delete("/api/orders/123")
         self._assert_error((resp, resp.status_code), 502, "Bad Gateway", "An unexpected error occurred.")
         self.assertNotIn("private upstream details", resp.get_data(as_text=True))

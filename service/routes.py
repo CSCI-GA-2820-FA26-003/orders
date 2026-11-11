@@ -50,7 +50,7 @@ def health():
 ######################################################################
 # CREATE AN ORDER
 ######################################################################
-@app.route("/orders", methods=["POST"])
+@app.route("/api/orders", methods=["POST"])
 def create_order():
     """Creates a new Order"""
     app.logger.info("Request to create an Order")
@@ -72,7 +72,7 @@ def create_order():
 ######################################################################
 # READ AN ORDER
 ######################################################################
-@app.route("/orders/<int:order_id>", methods=["GET"])
+@app.route("/api/orders/<int:order_id>", methods=["GET"])
 def get_orders(order_id):
     """Returns a single Order with all of its Items"""
     app.logger.info("Request for Order with id: %s", order_id)
@@ -91,7 +91,7 @@ def get_orders(order_id):
 ######################################################################
 # UPDATE AN ORDER
 ######################################################################
-@app.route("/orders/<int:order_id>", methods=["PUT"])
+@app.route("/api/orders/<int:order_id>", methods=["PUT"])
 def update_order(order_id):
     """Updates an existing Order"""
     app.logger.info("Request to update Order with id: %s", order_id)
@@ -118,7 +118,7 @@ def update_order(order_id):
 ######################################################################
 # CANCEL AN ORDER
 ######################################################################
-@app.route("/orders/<int:order_id>/cancel", methods=["PUT"])
+@app.route("/api/orders/<int:order_id>/cancel", methods=["PUT"])
 def cancel_order(order_id):
     """Cancels an Order that has not shipped yet."""
     app.logger.info("Request to cancel Order with id: %s", order_id)
@@ -141,7 +141,7 @@ def cancel_order(order_id):
 ######################################################################
 # UPDATE AN ITEM FROM AN ORDER
 ######################################################################
-@app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["PUT"])
+@app.route("/api/orders/<int:order_id>/items/<int:item_id>", methods=["PUT"])
 def update_order_item(order_id, item_id):
     """Updates the quantity and/or unit price of an Item in an Order"""
     app.logger.info("Request to update Item with id: %s in Order with id: %s", item_id, order_id)
@@ -184,7 +184,7 @@ def validate_order_query_parameters():
             abort(status.HTTP_400_BAD_REQUEST, description=f"Query parameter [{parameter}] must appear once")
 
 
-@app.route("/orders", methods=["GET"])
+@app.route("/api/orders", methods=["GET"])
 def list_orders():
     """Returns Orders, optionally filtered by customer_id and status."""
     app.logger.info("Request for order list")
@@ -221,7 +221,7 @@ def list_orders():
 ######################################################################
 # DELETE AN ORDER
 ######################################################################
-@app.route("/orders/<int:order_id>", methods=["DELETE"])
+@app.route("/api/orders/<int:order_id>", methods=["DELETE"])
 def delete_order(order_id):
     """Deletes an Order and its Items, returning no content"""
     app.logger.info("Request to delete Order with id: %s", order_id)
@@ -239,7 +239,7 @@ def delete_order(order_id):
 ######################################################################
 # DELETE AN ITEM FROM AN ORDER
 ######################################################################
-@app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["DELETE"])
+@app.route("/api/orders/<int:order_id>/items/<int:item_id>", methods=["DELETE"])
 def delete_order_item(order_id, item_id):
     """Deletes an Item belonging to the specified Order, returning no content"""
     app.logger.info("Request to delete Item with id: %s from Order with id: %s", item_id, order_id)
@@ -257,7 +257,7 @@ def delete_order_item(order_id, item_id):
 ######################################################################
 # READ AN ITEM FROM AN ORDER
 ######################################################################
-@app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["GET"])
+@app.route("/api/orders/<int:order_id>/items/<int:item_id>", methods=["GET"])
 def read_order_item(order_id, item_id):
     """Returns an Item only when it belongs to the specified Order"""
     app.logger.info("Request to read Item with id: %s from Order with id: %s", item_id, order_id)
@@ -282,7 +282,7 @@ def read_order_item(order_id, item_id):
 ######################################################################
 # ADD AN ITEM TO AN ORDER
 ######################################################################
-@app.route("/orders/<int:order_id>/items", methods=["POST"])
+@app.route("/api/orders/<int:order_id>/items", methods=["POST"])
 def add_order_item(order_id):
     """Adds an Item to an Order and recomputes the Order subtotal"""
     app.logger.info("Request to add an Item to Order with id: %s", order_id)
@@ -345,7 +345,7 @@ def add_order_item(order_id):
 ######################################################################
 # LIST ALL ITEMS IN AN ORDER
 ######################################################################
-@app.route("/orders/<int:order_id>/items", methods=["GET"])
+@app.route("/api/orders/<int:order_id>/items", methods=["GET"])
 def list_order_items(order_id):
     """Returns all Items belonging to the specified Order."""
     app.logger.info("Request for Items in Order with id: %s", order_id)
