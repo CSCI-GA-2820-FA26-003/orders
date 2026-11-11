@@ -372,8 +372,8 @@ UUID.
 
 ### Admin page
 
-`GET /` returns **200 OK** with the Orders admin page as HTML. The REST API routes
-below are unchanged.
+`GET /` returns **200 OK** with the Orders admin page as HTML. The page calls the REST
+API routes below.
 
 ### Create an order
 
@@ -598,7 +598,9 @@ service/                     - service python package
 ├── config.py                - configuration parameters
 ├── routes.py                - module with service routes
 ├── static                   - Orders admin page
-│   └── index.html           - admin page HTML
+│   ├── index.html           - admin page HTML
+│   ├── css                  - Bootstrap styles
+│   └── js/orders.js         - admin page behavior
 ├── models                   - business models package
 │   ├── __init__.py          - package initializer
 │   ├── persistent_base.py   - shared database persistence methods
