@@ -4,8 +4,92 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Orders Admin</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/css/cerulean_bootstrap.min.css">
 </head>
 <body>
-  <h1>Orders</h1>
+  <div class="container">
+    <div class="page-header">
+      <h1>Orders</h1>
+    </div>
+
+    <!-- Every action reports its outcome here -->
+    <div id="flash_message" class="alert" role="status" hidden></div>
+
+    <!-- Each story adds its own panel below this line -->
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <h2 class="panel-title">Create an order</h2>
+      </div>
+      <div class="panel-body">
+        <form id="create_form" novalidate>
+          <div class="form-group">
+            <label for="create_customer_id">Customer ID (required)</label>
+            <input type="number" class="form-control" id="create_customer_id">
+          </div>
+          <div class="row">
+            <div class="form-group col-sm-4">
+              <label for="create_product_id">Product ID</label>
+              <input type="number" class="form-control" id="create_product_id">
+            </div>
+            <div class="form-group col-sm-4">
+              <label for="create_quantity">Quantity</label>
+              <input type="number" class="form-control" id="create_quantity">
+            </div>
+            <div class="form-group col-sm-4">
+              <label for="create_unit_price">Unit price</label>
+              <input type="text" inputmode="decimal" class="form-control" id="create_unit_price">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" id="create_button">Create</button>
+        </form>
+        <p id="created_order" hidden>
+          New order ID: <strong id="created_order_id"></strong>
+        </p>
+      </div>
+    </div>
+
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <h2 class="panel-title">Find orders</h2>
+      </div>
+      <div class="panel-body">
+        <form id="status_filter_form" class="form-inline">
+          <div class="form-group">
+            <label for="filter_status">Order status</label>
+            <select id="filter_status" class="form-control">
+              <option value="">All statuses</option>
+              <option value="NEW">Pending (NEW)</option>
+              <option value="SHIPPED">Shipped</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" id="filter_button">Filter</button>
+          <button type="button" class="btn btn-default" id="clear_status_filter">Clear filter</button>
+        </form>
+        <div id="order_results" aria-busy="false">
+          <p id="status_filter_message" role="status" aria-live="polite"></p>
+          <div class="table-responsive">
+            <table id="orders_table" class="table table-striped" hidden>
+              <caption>Orders matching the selected status</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Order ID</th>
+                  <th scope="col">Customer ID</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody id="filtered_orders"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/orders.js"></script>
+  <script src="/static/js/status-filter.js"></script>
 </body>
 </html>

@@ -295,8 +295,21 @@ behave
 
 The tests read the service URL from `BASE_URL`, which defaults to
 `http://localhost:8080`, and wait up to `WAIT_SECONDS` for each page element. Put
-scenarios in `features/orders.feature` and step definitions in `features/steps/`.
-Scenarios use the web page only, with no direct calls to the service or the database.
+scenarios in `features/*.feature` and step definitions in `features/steps/`.
+User actions and result checks run through the web page. Status-filter scenarios
+use the REST API only to prepare orders with known statuses and clean up their own
+orders afterward. Empty-result and service-error scenarios simulate a single list
+response in the browser, then restore real requests. Run against a test database.
+
+The **Find orders** panel loads all orders when the admin page opens. Select a
+status and click **Filter** to send `GET /orders?status=<status>`. **Pending (NEW)**
+uses the existing `NEW` status; it does not introduce a new API status. Choose
+**All statuses** and click **Filter**, or click **Clear filter**, to reload
+`GET /orders` without a status parameter. Empty results and request failures are
+shown in the panel, and a failed search clears stale results and allows a retry.
+
+The CI build runs these Selenium scenarios against its PostgreSQL test database
+after the unit tests, using Chromium and its matching driver.
 
 ## Data Model
 
@@ -372,8 +385,8 @@ UUID.
 
 ### Admin page
 
-`GET /` returns **200 OK** with the Orders admin page as HTML. The REST API routes
-below are unchanged.
+`GET /` returns **200 OK** with the Orders admin page as HTML. The page calls the REST
+API routes below.
 
 ### Create an order
 
@@ -598,7 +611,9 @@ service/                     - service python package
 ├── config.py                - configuration parameters
 ├── routes.py                - module with service routes
 ├── static                   - Orders admin page
-│   └── index.html           - admin page HTML
+│   ├── index.html           - admin page HTML
+│   ├── css                  - Bootstrap styles
+│   └── js/orders.js         - admin page behavior
 ├── models                   - business models package
 │   ├── __init__.py          - package initializer
 │   ├── persistent_base.py   - shared database persistence methods
