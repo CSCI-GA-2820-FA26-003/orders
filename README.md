@@ -300,7 +300,20 @@ scenarios in `features/*.feature` and step definitions in `features/steps/`.
 User actions and result checks use the web page. Cancellation scenarios use the
 REST API only to prepare shipped and delivered fixtures. The recovery scenario
 simulates one failed cancellation response, then restores real requests for the
-retry. Run the tests against a test database.
+retry. Status-filter scenarios use the REST API only to prepare orders with known
+statuses and clean up their own orders afterward. Empty-result and service-error
+scenarios simulate a single list response in the browser, then restore real
+requests. Run the tests against a test database.
+
+The **Find orders** panel loads all orders when the admin page opens. Select a
+status and click **Filter** to send `GET /orders?status=<status>`. **Pending (NEW)**
+uses the existing `NEW` status; it does not introduce a new API status. Choose
+**All statuses** and click **Filter**, or click **Clear filter**, to reload
+`GET /orders` without a status parameter. Empty results and request failures are
+shown in the panel, and a failed search clears stale results and allows a retry.
+
+The CI build runs these Selenium scenarios against its PostgreSQL test database
+after the unit tests, using Chromium and its matching driver.
 
 ## Data Model
 
