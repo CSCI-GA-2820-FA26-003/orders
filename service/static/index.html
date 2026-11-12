@@ -48,8 +48,48 @@
         </p>
       </div>
     </div>
+
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <h2 class="panel-title">Find orders</h2>
+      </div>
+      <div class="panel-body">
+        <form id="status_filter_form" class="form-inline">
+          <div class="form-group">
+            <label for="filter_status">Order status</label>
+            <select id="filter_status" class="form-control">
+              <option value="">All statuses</option>
+              <option value="NEW">Pending (NEW)</option>
+              <option value="SHIPPED">Shipped</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" id="filter_button">Filter</button>
+          <button type="button" class="btn btn-default" id="clear_status_filter">Clear filter</button>
+        </form>
+        <div id="order_results" aria-busy="false">
+          <p id="status_filter_message" role="status" aria-live="polite"></p>
+          <div class="table-responsive">
+            <table id="orders_table" class="table table-striped" hidden>
+              <caption>Orders matching the selected status</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Order ID</th>
+                  <th scope="col">Customer ID</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody id="filtered_orders"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="/static/js/orders.js"></script>
+  <script src="/static/js/status-filter.js"></script>
 </body>
 </html>
