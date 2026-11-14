@@ -17,3 +17,16 @@ Scenario: Forget the customer ID
     When I submit a new order without a customer ID
     Then I see a message explaining what is wrong
     And no order ID is shown
+
+Scenario: Pressing Create twice sends one order
+    Given I am on the Orders admin page
+    When I fill in the details for a new order
+    And I press Create twice before the page responds
+    Then I see a creation confirmation and the new order ID
+    And only one create request was sent
+
+Scenario: An error after a successful creation hides the earlier order ID
+    Given I have created an order on the admin page
+    When I submit a new order without a customer ID
+    Then I see a message explaining what is wrong
+    And no order ID is shown

@@ -64,8 +64,17 @@ function buildNewOrder() {
   return order;
 }
 
+// True while a create request is waiting for the service
+let createPending = false;
+
 document.getElementById("create_form").addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (createPending) {
+    return;
+  }
+  createPending = true;
+  const createButton = document.getElementById("create_button");
+  createButton.disabled = true;
   const createdOrder = document.getElementById("created_order");
   createdOrder.hidden = true;
 
@@ -76,5 +85,8 @@ document.getElementById("create_form").addEventListener("submit", async (event) 
     showMessage("success", "Order created");
   } catch (error) {
     showMessage("danger", error.message);
+  } finally {
+    createPending = false;
+    createButton.disabled = false;
   }
 });

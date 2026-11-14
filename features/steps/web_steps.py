@@ -24,20 +24,72 @@ def step_see_orders_heading(context):
     assert found
 
 
+# The order that the scenarios enter on the page
+NEW_ORDER = {
+    "customer_id": "1001",
+    "product_id": "501",
+    "quantity": "2",
+    "unit_price": "12.50",
+}
+
+
+@given("I have created an order on the admin page")
+def step_create_order(context):
+    """Create an order on the page and remember its ID"""
+    step_open_admin_page(context)
+    step_submit_new_order(context)
+    step_see_confirmation_and_id(context)
+    context.order_id = context.driver.find_element(By.ID, "created_order_id").text
+
+
+@when("I fill in the details for a new order")
+def step_fill_new_order(context):
+    """Fill in the order and its item without submitting the form"""
+    for field, value in NEW_ORDER.items():
+        element = context.driver.find_element(By.ID, f"create_{field}")
+        element.clear()
+        element.send_keys(value)
+
+
 @when("I submit the details for a new order")
 def step_submit_new_order(context):
     """Fill in the order and its item, then submit the form"""
-    context.driver.find_element(By.ID, "create_customer_id").send_keys("1001")
-    context.driver.find_element(By.ID, "create_product_id").send_keys("501")
-    context.driver.find_element(By.ID, "create_quantity").send_keys("2")
-    context.driver.find_element(By.ID, "create_unit_price").send_keys("12.50")
+    step_fill_new_order(context)
     context.driver.find_element(By.ID, "create_button").click()
 
 
 @when("I submit a new order without a customer ID")
 def step_submit_without_customer(context):
-    """Submit the form with the customer ID left blank"""
+    """Clear the customer ID and submit the form"""
+    context.driver.find_element(By.ID, "create_customer_id").clear()
     context.driver.find_element(By.ID, "create_button").click()
+
+
+@when("I press Create twice before the page responds")
+def step_press_create_twice(context):
+    """Count the page's create requests, then click Create twice in a row"""
+    context.driver.execute_script(
+        """
+        window.createRequests = 0;
+        const realFetch = window.fetch;
+        window.fetch = (url, options = {}) => {
+            if (options.method === "POST") {
+                window.createRequests += 1;
+            }
+            return realFetch(url, options);
+        };
+        const button = document.getElementById("create_button");
+        button.click();
+        button.click();
+        """
+    )
+
+
+@then("only one create request was sent")
+def step_one_create_request(context):
+    """Check that the second click did not send another order"""
+    assert context.driver.execute_script("return window.createRequests") == 1
+    assert context.driver.find_element(By.ID, "create_button").is_enabled()
 
 
 @then("I see a creation confirmation and the new order ID")
