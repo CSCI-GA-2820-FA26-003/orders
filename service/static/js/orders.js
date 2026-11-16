@@ -96,8 +96,20 @@ function formatMoney(amount) {
   return Number(amount).toFixed(2);
 }
 
+// Cancellation always targets the displayed record, even if the lookup input changes.
+let selectedOrder = null;
+let cancelPending = false;
+
+/** Clears the selection so hidden or outdated details cannot be cancelled. */
+function clearOrderDetails() {
+  selectedOrder = null;
+  document.getElementById("order_details").hidden = true;
+  document.getElementById("cancel_button").disabled = true;
+}
+
 /** Shows an order and its items in the lookup panel. */
 function showOrderDetails(order) {
+  selectedOrder = order;
   document.getElementById("order_detail_id").textContent = order.id;
   document.getElementById("order_detail_customer_id").textContent = order.customer_id;
   document.getElementById("order_detail_status").textContent = order.status;
@@ -113,6 +125,7 @@ function showOrderDetails(order) {
   }
   document.getElementById("order_detail_no_items").hidden = order.items.length > 0;
   document.getElementById("order_details").hidden = false;
+  document.getElementById("cancel_button").disabled = order.status !== "NEW" || cancelPending;
 }
 
 // True while a lookup request is waiting for the service
@@ -120,10 +133,10 @@ let lookupPending = false;
 
 document.getElementById("lookup_form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (lookupPending) {
+  if (lookupPending || cancelPending) {
     return;
   }
-  document.getElementById("order_details").hidden = true;
+  clearOrderDetails();
 
   const orderId = fieldValue("lookup_order_id");
   if (!/^\d+$/.test(orderId)) {
@@ -143,5 +156,30 @@ document.getElementById("lookup_form").addEventListener("submit", async (event) 
   } finally {
     lookupPending = false;
     lookupButton.disabled = false;
+  }
+});
+
+document.getElementById("cancel_button").addEventListener("click", async () => {
+  if (!selectedOrder || selectedOrder.status !== "NEW" || lookupPending || cancelPending) {
+    return;
+  }
+
+  const orderId = selectedOrder.id;
+  cancelPending = true;
+  const cancelButton = document.getElementById("cancel_button");
+  const lookupButton = document.getElementById("lookup_button");
+  cancelButton.disabled = true;
+  lookupButton.disabled = true;
+  try {
+    const order = await sendRequest(`${ORDERS_URL}/${orderId}/cancel`, "PUT");
+    showOrderDetails(order);
+    showMessage("success", `Order ${order.id} cancelled`);
+  } catch (error) {
+    clearOrderDetails();
+    showMessage("danger", error.message);
+  } finally {
+    cancelPending = false;
+    lookupButton.disabled = false;
+    cancelButton.disabled = !selectedOrder || selectedOrder.status !== "NEW";
   }
 });

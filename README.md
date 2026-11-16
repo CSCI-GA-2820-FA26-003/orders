@@ -281,22 +281,26 @@ The BDD tests open the admin page in a headless Chrome browser using Selenium. R
 in the dev container, because its image includes Chrome and the driver. Rebuild the dev
 container once so that it picks up the image and the new packages.
 
-Start the service in one terminal:
+Start the service against the separate test database described above in one
+terminal. Port 8081 avoids conflicting with the local K3s service on port 8080:
 
 ```bash
-make run
+DATABASE_URI=postgresql+psycopg://postgres:pgs3cr3t@postgres:5432/testdb PORT=8081 make run
 ```
 
 Run the tests in a second terminal:
 
 ```bash
-behave
+BASE_URL=http://localhost:8081 behave
 ```
 
 The tests read the service URL from `BASE_URL`, which defaults to
 `http://localhost:8080`, and wait up to `WAIT_SECONDS` for each page element. Put
-scenarios in `features/orders.feature` and step definitions in `features/steps/`.
-Scenarios use the web page only, with no direct calls to the service or the database.
+scenarios in `features/*.feature` and step definitions in `features/steps/`.
+User actions and result checks use the web page. Cancellation scenarios use the
+REST API only to prepare shipped and delivered fixtures. The recovery scenario
+simulates one failed cancellation response, then restores real requests for the
+retry. Run the tests against a test database.
 
 ## Data Model
 
@@ -374,6 +378,13 @@ UUID.
 
 `GET /` returns **200 OK** with the Orders admin page as HTML. The page calls the REST
 API routes below.
+
+Look up an order by ID, then use **Cancel order** in its details to invoke the
+existing cancellation action. Only `NEW` orders can be cancelled. The page shows
+the service's result and the returned `CANCELLED` status; the same order ID,
+customer, items and subtotal remain available when looked up again. Cancellation
+and lookup controls are locked while cancellation is pending. A failed lookup or
+cancellation clears the selected record so stale details cannot be cancelled.
 
 ### Create an order
 
@@ -624,8 +635,10 @@ tests/                       - test cases package
 features/                    - BDD tests for the admin page
 ├── environment.py           - starts and closes the browser
 ├── orders.feature           - admin page scenarios
+├── cancel_order.feature     - cancellation and retained-record scenarios
 └── steps
-    └── web_steps.py         - Selenium step definitions
+    ├── web_steps.py         - create and lookup Selenium steps
+    └── cancel_order_steps.py - cancellation Selenium steps
 ```
 
 ## License
