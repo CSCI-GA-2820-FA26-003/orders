@@ -48,6 +48,35 @@
         </p>
       </div>
     </div>
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <h2 class="panel-title">Look up an order</h2>
+      </div>
+      <div class="panel-body">
+        <form id="lookup_form" class="form-inline" novalidate>
+          <div class="form-group">
+            <label for="lookup_order_id">Order ID</label>
+            <input type="number" class="form-control" id="lookup_order_id">
+          </div>
+          <button type="submit" class="btn btn-primary" id="lookup_button">Look up</button>
+        </form>
+        <div id="order_details" style="margin-top: 20px" hidden>
+          <dl class="dl-horizontal">
+            <dt>Order ID</dt><dd id="order_detail_id"></dd>
+            <dt>Customer ID</dt><dd id="order_detail_customer_id"></dd>
+            <dt>Status</dt><dd id="order_detail_status"></dd>
+            <dt>Subtotal</dt><dd id="order_detail_subtotal"></dd>
+          </dl>
+          <table class="table table-striped">
+            <thead>
+              <tr><th>Product ID</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr>
+            </thead>
+            <tbody id="order_detail_items"></tbody>
+          </table>
+          <p id="order_detail_no_items" hidden>This order has no items.</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="/static/js/orders.js"></script>

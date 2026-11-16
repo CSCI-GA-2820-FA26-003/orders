@@ -113,6 +113,94 @@ def step_no_order_id(context):
     assert not context.driver.find_element(By.ID, "created_order").is_displayed()
 
 
+@given("I have looked up an order on the admin page")
+def step_look_up_existing_order(context):
+    """Create an order, then show it in the lookup panel"""
+    step_create_order(context)
+    step_look_up_order(context)
+    wait_for_message(context, "alert-success", f"Found order {context.order_id}")
+
+
+@when("I look up its order ID")
+def step_look_up_order(context):
+    """Look up the order that the scenario created"""
+    look_up(context, context.order_id)
+
+
+@when("I look up an order ID that does not exist")
+def step_look_up_missing_order(context):
+    """Look up an ID that no order can have"""
+    look_up(context, "0")
+
+
+@when("I press Look up twice for its order ID")
+def step_press_look_up_twice(context):
+    """Count the page's lookup requests, then click Look up twice in a row"""
+    field = context.driver.find_element(By.ID, "lookup_order_id")
+    field.clear()
+    field.send_keys(context.order_id)
+    context.driver.execute_script(
+        """
+        window.lookupRequests = 0;
+        const realFetch = window.fetch;
+        window.fetch = (url, options = {}) => {
+            if ((options.method || "GET") === "GET") {
+                window.lookupRequests += 1;
+            }
+            return realFetch(url, options);
+        };
+        const button = document.getElementById("lookup_button");
+        button.click();
+        button.click();
+        """
+    )
+
+
+@then("only one lookup request was sent")
+def step_one_lookup_request(context):
+    """Check that the second click did not send another lookup"""
+    assert context.driver.execute_script("return window.lookupRequests") == 1
+    assert context.driver.find_element(By.ID, "lookup_button").is_enabled()
+
+
+@then("I see that same ID and the order details I entered")
+def step_see_order_details(context):
+    """Check the order fields and its item against what was entered"""
+    wait_for_message(context, "alert-success", f"Found order {context.order_id}")
+    assert detail_text(context, "order_detail_id") == context.order_id
+    assert detail_text(context, "order_detail_customer_id") == NEW_ORDER["customer_id"]
+    assert detail_text(context, "order_detail_status") == "NEW"
+    assert detail_text(context, "order_detail_subtotal") == "25.00"
+    cells = context.driver.find_elements(By.CSS_SELECTOR, "#order_detail_items td")
+    expected = [NEW_ORDER["product_id"], NEW_ORDER["quantity"], NEW_ORDER["unit_price"], "25.00"]
+    assert [cell.text for cell in cells] == expected
+
+
+@then("I see an order-not-found message")
+def step_see_not_found(context):
+    """Check that the service's not-found message is shown"""
+    wait_for_message(context, "alert-danger", "was not found")
+
+
+@then("the previous order details are no longer shown")
+def step_details_hidden(context):
+    """Check that the earlier order is no longer visible"""
+    assert not context.driver.find_element(By.ID, "order_details").is_displayed()
+
+
+def look_up(context, order_id):
+    """Enter an order ID in the lookup panel and submit it"""
+    field = context.driver.find_element(By.ID, "lookup_order_id")
+    field.clear()
+    field.send_keys(order_id)
+    context.driver.find_element(By.ID, "lookup_button").click()
+
+
+def detail_text(context, element_id):
+    """Return the text of one field in the order details"""
+    return context.driver.find_element(By.ID, element_id).text
+
+
 def wait_for_message(context, css_class, text):
     """Wait for the page to show a message with this style and text"""
     wait = WebDriverWait(context.driver, context.wait_seconds)

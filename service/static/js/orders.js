@@ -90,3 +90,58 @@ document.getElementById("create_form").addEventListener("submit", async (event) 
     createButton.disabled = false;
   }
 });
+
+/** Formats a money amount with two decimals. */
+function formatMoney(amount) {
+  return Number(amount).toFixed(2);
+}
+
+/** Shows an order and its items in the lookup panel. */
+function showOrderDetails(order) {
+  document.getElementById("order_detail_id").textContent = order.id;
+  document.getElementById("order_detail_customer_id").textContent = order.customer_id;
+  document.getElementById("order_detail_status").textContent = order.status;
+  document.getElementById("order_detail_subtotal").textContent = formatMoney(order.subtotal);
+
+  const rows = document.getElementById("order_detail_items");
+  rows.replaceChildren();
+  for (const item of order.items) {
+    const row = rows.insertRow();
+    for (const value of [item.product_id, item.quantity, formatMoney(item.unit_price), formatMoney(item.line_total)]) {
+      row.insertCell().textContent = value;
+    }
+  }
+  document.getElementById("order_detail_no_items").hidden = order.items.length > 0;
+  document.getElementById("order_details").hidden = false;
+}
+
+// True while a lookup request is waiting for the service
+let lookupPending = false;
+
+document.getElementById("lookup_form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (lookupPending) {
+    return;
+  }
+  document.getElementById("order_details").hidden = true;
+
+  const orderId = fieldValue("lookup_order_id");
+  if (!/^\d+$/.test(orderId)) {
+    showMessage("danger", "Enter an order ID to look up");
+    return;
+  }
+
+  lookupPending = true;
+  const lookupButton = document.getElementById("lookup_button");
+  lookupButton.disabled = true;
+  try {
+    const order = await sendRequest(`${ORDERS_URL}/${orderId}`);
+    showOrderDetails(order);
+    showMessage("success", `Found order ${order.id}`);
+  } catch (error) {
+    showMessage("danger", error.message);
+  } finally {
+    lookupPending = false;
+    lookupButton.disabled = false;
+  }
+});
