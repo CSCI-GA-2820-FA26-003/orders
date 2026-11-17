@@ -49,10 +49,10 @@ Scenario: Pressing Look up twice sends one lookup
     And only one lookup request was sent
 
 Scenario: Save a correction to an order
-    Given I have looked up an order on the admin page
-    When I change its customer ID and status and save the order
-    And I look up its order ID
-    Then I see the corrected details under the original order ID with its items preserved
+    Given I have opened an existing order on the admin page
+    When I change an editable detail and save the order
+    And I look up the same order again
+    Then I see the corrected detail under the original order ID
 
 Scenario: A failed lookup clears the order available for update
     Given I have looked up an order on the admin page

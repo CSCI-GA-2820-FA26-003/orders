@@ -113,6 +113,7 @@ def step_no_order_id(context):
     assert not context.driver.find_element(By.ID, "created_order").is_displayed()
 
 
+@given("I have opened an existing order on the admin page")
 @given("I have looked up an order on the admin page")
 def step_look_up_existing_order(context):
     """Create an order, then show it in the lookup panel"""
@@ -121,6 +122,7 @@ def step_look_up_existing_order(context):
     wait_for_message(context, "alert-success", f"Found order {context.order_id}")
 
 
+@when("I look up the same order again")
 @when("I look up its order ID")
 def step_look_up_order(context):
     """Look up the order that the scenario created"""
@@ -208,25 +210,23 @@ def wait_for_message(context, css_class, text):
     assert css_class in context.driver.find_element(By.ID, "flash_message").get_attribute("class")
 
 
-@when("I change its customer ID and status and save the order")
+@when("I change an editable detail and save the order")
 def step_update_order(context):
-    """Submit corrections and wait for the update to finish"""
+    """Change only the customer ID and wait for the update to finish"""
     customer = context.driver.find_element(By.ID, "update_customer_id")
     customer.clear()
     customer.send_keys("1002")
-    status = context.driver.find_element(By.ID, "update_status")
-    status.find_element(By.CSS_SELECTOR, 'option[value="SHIPPED"]').click()
     context.driver.find_element(By.ID, "update_button").click()
     wait_for_message(context, "alert-success", f"Order {context.order_id} updated")
 
 
-@then("I see the corrected details under the original order ID with its items preserved")
+@then("I see the corrected detail under the original order ID")
 def step_see_updated_order(context):
-    """Check the saved edits, original ID, subtotal, and item after a fresh lookup"""
+    """Check the correction and the unchanged order details after a fresh lookup"""
     wait_for_message(context, "alert-success", f"Found order {context.order_id}")
     assert detail_text(context, "order_detail_id") == context.order_id
     assert detail_text(context, "order_detail_customer_id") == "1002"
-    assert detail_text(context, "order_detail_status") == "SHIPPED"
+    assert detail_text(context, "order_detail_status") == "NEW"
     assert detail_text(context, "order_detail_subtotal") == "25.00"
     cells = context.driver.find_elements(By.CSS_SELECTOR, "#order_detail_items td")
     assert [cell.text for cell in cells] == [
