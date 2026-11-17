@@ -40,7 +40,6 @@ def health():
     return jsonify(status="OK"), status.HTTP_200_OK
 
 
-# Keep the root admin page registered before RESTX adds its API root rule.
 api = OrdersApi(
     app,
     version="1.0.0",
@@ -50,6 +49,16 @@ api = OrdersApi(
     default_label="Order and item operations",
     doc="/apidocs",
 )
+
+
+@api.representation("application/json")
+def output_json(data, code, headers=None):
+    """Preserve jsonify's formatting and Flask JSON provider for every resource."""
+    response = app.json.response(data)
+    response.status_code = code
+    response.headers.extend(headers or {})
+    return response
+
 
 item_input = api.model(
     "ItemInput",
@@ -240,11 +249,11 @@ class OrderResource(Resource):
         if order is None:
             # DELETE is idempotent: if the Order is already gone there is nothing to do
             app.logger.info("Order with id: %s not found, nothing to delete", order_id)
-            return "", status.HTTP_204_NO_CONTENT
+            return app.response_class(status=status.HTTP_204_NO_CONTENT)
 
         order.delete()
         app.logger.info("Order with id: %s deleted", order_id)
-        return "", status.HTTP_204_NO_CONTENT
+        return app.response_class(status=status.HTTP_204_NO_CONTENT)
 
 
 @api.route("/orders/<int:order_id>/cancel", endpoint="cancel_order")
@@ -436,8 +445,8 @@ class ItemResource(Resource):
         if item is None or item.order_id != order_id:
             # DELETE is idempotent: if the Item is not in this Order there is nothing to do
             app.logger.info("Item with id: %s not found in Order with id: %s, nothing to delete", item_id, order_id)
-            return "", status.HTTP_204_NO_CONTENT
+            return app.response_class(status=status.HTTP_204_NO_CONTENT)
 
         item.delete()
         app.logger.info("Item with id: %s deleted from Order with id: %s", item_id, order_id)
-        return "", status.HTTP_204_NO_CONTENT
+        return app.response_class(status=status.HTTP_204_NO_CONTENT)

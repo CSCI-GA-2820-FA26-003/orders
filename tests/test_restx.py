@@ -1,8 +1,16 @@
 """Regression checks for the RESTX documentation and HTTP integration."""
 
+from datetime import date, datetime, timezone
+from decimal import Decimal
+from itertools import product
 from unittest import TestCase
+from unittest.mock import Mock, patch
+from uuid import UUID
+
+from flask import Flask, jsonify
 
 from wsgi import app
+from service.common.api import OrdersApi
 
 
 class TestRestx(TestCase):
@@ -23,6 +31,23 @@ class TestRestx(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"<h1>Orders</h1>", response.data)
         response.close()
+
+    def test_admin_page_can_be_registered_after_api(self):
+        """It should reserve the homepage for Flask regardless of registration order."""
+        for doc in ("/apidocs", False):
+            with self.subTest(doc=doc):
+                isolated_app = Flask(__name__)
+                api = OrdersApi(isolated_app, doc=doc)
+                isolated_app.add_url_rule("/", "index", lambda: "Orders admin page")
+                client = isolated_app.test_client()
+
+                response = client.get("/")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data, b"Orders admin page")
+                with isolated_app.test_request_context():
+                    self.assertEqual(api.base_path, "/")
+                self.assertEqual(client.get("/swagger.json").get_json()["basePath"], "/")
+                self.assertEqual(client.get("/apidocs").status_code, 200 if doc else 404)
 
     def test_documented_operations_keep_existing_paths(self):
         """It should document every order and item operation without an API prefix."""
@@ -72,3 +97,77 @@ class TestRestx(TestCase):
         self.assertEqual(set(response.get_json()), {"status", "error", "message"})
         self.assertEqual(response.headers["X-Request-ID"], "restx-method-test")
         self.assertEqual(set(response.headers["Allow"].split(", ")), {"GET", "POST", "HEAD", "OPTIONS"})
+
+    def test_json_responses_match_flask_provider(self):
+        """It should retain jsonify's exact bytes for objects, lists and creation responses."""
+        payload = {"status": "NEW", "id": 123, "customer_id": 7, "items": [], "label": "café"}
+        order = Mock(id=123)
+        order.serialize.return_value = payload
+        cases = (
+            ("GET", "/orders", [payload], 200),
+            ("GET", "/orders/123", payload, 200),
+            ("POST", "/orders", payload, 201),
+        )
+        with patch("service.routes.Order") as order_model:
+            order_model.return_value = order
+            order_model.find.return_value = order
+            order_model.all.return_value = [order]
+            for debug, (method, path, body, code) in product((False, True), cases):
+                with (
+                    self.subTest(debug=debug, method=method, path=path),
+                    patch.dict(app.config, {"DEBUG": debug}),
+                ):
+                    with app.app_context():
+                        expected = jsonify(body)
+                    response = self.client.open(
+                        path, method=method, json={"customer_id": 7},
+                        headers={"X-Request-ID": "restx-json-test"},
+                    )
+                    self.assertEqual(response.status_code, code)
+                    self.assertEqual(response.data, expected.data)
+                    self.assertEqual(response.content_type, expected.content_type)
+                    self.assertEqual(response.headers["X-Request-ID"], "restx-json-test")
+                    if code == 201:
+                        self.assertEqual(response.headers["Location"], "http://localhost/orders/123")
+
+    def test_json_responses_support_flask_types(self):
+        """It should use Flask's Decimal, date, datetime and UUID encoders."""
+        payload = {
+            "subtotal": Decimal("12.50"),
+            "created_at": datetime(2026, 11, 17, 12, tzinfo=timezone.utc),
+            "date": date(2026, 11, 17),
+            "reference": UUID("12345678-1234-5678-1234-567812345678"),
+        }
+        order = Mock()
+        order.serialize.return_value = payload
+        with app.app_context():
+            expected = jsonify(payload)
+        with patch("service.routes.Order.find", return_value=order):
+            response = self.client.get("/orders/123")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, expected.data)
+        self.assertEqual(response.content_type, expected.content_type)
+
+    def test_delete_responses_match_flask(self):
+        """It should retain empty Flask 204 responses for existing and absent records."""
+        cases = (
+            ("/orders/123", Mock(), None),
+            ("/orders/123", None, None),
+            ("/orders/123/items/456", None, Mock(order_id=123)),
+            ("/orders/123/items/456", None, None),
+            ("/orders/123/items/456", None, Mock(order_id=999)),
+        )
+        with app.app_context():
+            expected = app.make_response(("", 204))
+        for path, order, item in cases:
+            with self.subTest(path=path, order=order, item=item):
+                with (
+                    patch("service.routes.Order.find", return_value=order),
+                    patch("service.routes.Item.find", return_value=item),
+                ):
+                    response = self.client.delete(path, headers={"X-Request-ID": "restx-delete-test"})
+                self.assertEqual(response.status_code, 204)
+                self.assertEqual(response.data, b"")
+                self.assertEqual(response.content_type, expected.content_type)
+                self.assertNotIn("Content-Length", response.headers)
+                self.assertEqual(response.headers["X-Request-ID"], "restx-delete-test")
