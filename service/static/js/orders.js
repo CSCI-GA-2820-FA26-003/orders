@@ -97,7 +97,12 @@ function formatMoney(amount) {
 }
 
 let selectedOrderId = null;
-let updatePending = false;
+let orderChangePending = false;
+
+function clearSelectedOrder() {
+  selectedOrderId = null;
+  document.getElementById("order_details").hidden = true;
+}
 
 /** Shows an order and its items in the lookup panel. */
 function showOrderDetails(order) {
@@ -126,11 +131,10 @@ let lookupPending = false;
 
 document.getElementById("lookup_form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (lookupPending || updatePending) {
+  if (lookupPending || orderChangePending) {
     return;
   }
-  selectedOrderId = null;
-  document.getElementById("order_details").hidden = true;
+  clearSelectedOrder();
 
   const orderId = fieldValue("lookup_order_id");
   if (!/^\d+$/.test(orderId)) {
@@ -153,36 +157,53 @@ document.getElementById("lookup_form").addEventListener("submit", async (event) 
   }
 });
 
-document.getElementById("update_form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (selectedOrderId === null || updatePending) {
+/** Keeps lookup and edits from changing the selected order during a save or delete. */
+async function changeSelectedOrder(action) {
+  if (selectedOrderId === null || orderChangePending) {
     return;
   }
 
-  const customerId = fieldValue("update_customer_id");
-  const changes = { status: fieldValue("update_status") };
-  if (customerId !== "") {
-    changes.customer_id = Number(customerId);
-  } else {
-    showMessage("danger", "Enter a customer ID");
-    return;
+  orderChangePending = true;
+  const buttons = ["lookup_button", "update_button", "delete_button"]
+    .map((id) => document.getElementById(id));
+  for (const button of buttons) {
+    button.disabled = true;
   }
-
-  updatePending = true;
-  const updateButton = document.getElementById("update_button");
-  const lookupButton = document.getElementById("lookup_button");
-  updateButton.disabled = true;
-  lookupButton.disabled = true;
   try {
-    // Omitting items preserves the existing items on the server.
-    const order = await sendRequest(`${ORDERS_URL}/${selectedOrderId}`, "PUT", changes);
-    showOrderDetails(order);
-    showMessage("success", `Order ${order.id} updated`);
+    await action(selectedOrderId);
   } catch (error) {
     showMessage("danger", error.message);
   } finally {
-    updatePending = false;
-    updateButton.disabled = false;
-    lookupButton.disabled = false;
+    orderChangePending = false;
+    for (const button of buttons) {
+      button.disabled = false;
+    }
   }
+}
+
+document.getElementById("update_form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  changeSelectedOrder(async (orderId) => {
+    const customerId = fieldValue("update_customer_id");
+    if (customerId === "") {
+      showMessage("danger", "Enter a customer ID");
+      return;
+    }
+
+    // Omitting items preserves the existing items on the server.
+    const order = await sendRequest(`${ORDERS_URL}/${orderId}`, "PUT", {
+      customer_id: Number(customerId),
+      status: fieldValue("update_status"),
+    });
+    showOrderDetails(order);
+    showMessage("success", `Order ${order.id} updated`);
+  });
+});
+
+document.getElementById("delete_button").addEventListener("click", () => {
+  changeSelectedOrder(async (orderId) => {
+    await sendRequest(`${ORDERS_URL}/${orderId}`, "DELETE");
+    clearSelectedOrder();
+    showMessage("success", `Order ${orderId} deleted`);
+  });
 });

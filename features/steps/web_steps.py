@@ -238,3 +238,43 @@ def step_see_updated_order(context):
 def step_update_form_hidden(context):
     """Check that the previous order cannot be edited after a failed lookup"""
     assert not context.driver.find_element(By.ID, "update_form").is_displayed()
+
+
+@given("I have created two orders on the admin page")
+def step_create_two_orders(context):
+    """Create two separate orders through the page and remember their IDs"""
+    step_create_order(context)
+    context.first_order_id = context.order_id
+    step_create_order(context)
+    context.second_order_id = context.order_id
+    assert context.first_order_id != context.second_order_id
+
+
+@when("I delete the first order")
+def step_delete_first_order(context):
+    """Select the first order and delete it through the page"""
+    look_up(context, context.first_order_id)
+    wait_for_message(context, "alert-success", f"Found order {context.first_order_id}")
+    # Typing another ID without looking it up must not change the selected order.
+    lookup_field = context.driver.find_element(By.ID, "lookup_order_id")
+    lookup_field.clear()
+    lookup_field.send_keys(context.second_order_id)
+    delete_button = context.driver.find_element(By.ID, "delete_button")
+    delete_button.click()
+    wait_for_message(context, "alert-success", f"Order {context.first_order_id} deleted")
+    step_details_hidden(context)
+
+
+@then("I cannot find the first order by ID")
+def step_first_order_not_found(context):
+    """Look up the deleted order and check the service's response"""
+    look_up(context, context.first_order_id)
+    wait_for_message(context, "alert-danger", f"Order with id [{context.first_order_id}] was not found")
+
+
+@then("I can still find the second order by ID")
+def step_second_order_found(context):
+    """Look up the other order and confirm its ID"""
+    look_up(context, context.second_order_id)
+    wait_for_message(context, "alert-success", f"Found order {context.second_order_id}")
+    assert detail_text(context, "order_detail_id") == context.second_order_id

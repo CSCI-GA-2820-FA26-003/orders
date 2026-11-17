@@ -59,3 +59,9 @@ Scenario: A failed lookup clears the order available for update
     When I look up an order ID that does not exist
     Then I see an order-not-found message
     And the update form is hidden
+
+Scenario: Remove only the order entered by mistake
+    Given I have created two orders on the admin page
+    When I delete the first order
+    Then I cannot find the first order by ID
+    And I can still find the second order by ID
