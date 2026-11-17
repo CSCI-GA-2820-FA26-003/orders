@@ -47,3 +47,15 @@ Scenario: Pressing Look up twice sends one lookup
     When I press Look up twice for its order ID
     Then I see that same ID and the order details I entered
     And only one lookup request was sent
+
+Scenario: Save a correction to an order
+    Given I have looked up an order on the admin page
+    When I change its customer ID and status and save the order
+    And I look up its order ID
+    Then I see the corrected details under the original order ID with its items preserved
+
+Scenario: A failed lookup clears the order available for update
+    Given I have looked up an order on the admin page
+    When I look up an order ID that does not exist
+    Then I see an order-not-found message
+    And the update form is hidden
