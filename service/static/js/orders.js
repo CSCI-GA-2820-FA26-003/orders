@@ -96,8 +96,14 @@ function formatMoney(amount) {
   return Number(amount).toFixed(2);
 }
 
+let selectedOrderId = null;
+let updatePending = false;
+
 /** Shows an order and its items in the lookup panel. */
 function showOrderDetails(order) {
+  selectedOrderId = order.id;
+  document.getElementById("update_customer_id").value = order.customer_id;
+  document.getElementById("update_status").value = order.status;
   document.getElementById("order_detail_id").textContent = order.id;
   document.getElementById("order_detail_customer_id").textContent = order.customer_id;
   document.getElementById("order_detail_status").textContent = order.status;
@@ -120,9 +126,10 @@ let lookupPending = false;
 
 document.getElementById("lookup_form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (lookupPending) {
+  if (lookupPending || updatePending) {
     return;
   }
+  selectedOrderId = null;
   document.getElementById("order_details").hidden = true;
 
   const orderId = fieldValue("lookup_order_id");
@@ -142,6 +149,40 @@ document.getElementById("lookup_form").addEventListener("submit", async (event) 
     showMessage("danger", error.message);
   } finally {
     lookupPending = false;
+    lookupButton.disabled = false;
+  }
+});
+
+document.getElementById("update_form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (selectedOrderId === null || updatePending) {
+    return;
+  }
+
+  const customerId = fieldValue("update_customer_id");
+  const changes = { status: fieldValue("update_status") };
+  if (customerId !== "") {
+    changes.customer_id = Number(customerId);
+  } else {
+    showMessage("danger", "Enter a customer ID");
+    return;
+  }
+
+  updatePending = true;
+  const updateButton = document.getElementById("update_button");
+  const lookupButton = document.getElementById("lookup_button");
+  updateButton.disabled = true;
+  lookupButton.disabled = true;
+  try {
+    // Omitting items preserves the existing items on the server.
+    const order = await sendRequest(`${ORDERS_URL}/${selectedOrderId}`, "PUT", changes);
+    showOrderDetails(order);
+    showMessage("success", `Order ${order.id} updated`);
+  } catch (error) {
+    showMessage("danger", error.message);
+  } finally {
+    updatePending = false;
+    updateButton.disabled = false;
     lookupButton.disabled = false;
   }
 });
