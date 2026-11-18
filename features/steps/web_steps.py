@@ -113,6 +113,25 @@ def step_no_order_id(context):
     assert not context.driver.find_element(By.ID, "created_order").is_displayed()
 
 
+@when("I list orders without a filter")
+def step_list_orders(context):
+    """Request the full list through the page"""
+    context.driver.find_element(By.ID, "list_button").click()
+
+
+@then("I see both order IDs and their statuses in the results")
+def step_check_list_orders(context):
+    """Find both newly created orders in their own rows"""
+    wait_for_message(context, "alert-success", "Orders loaded")
+    rows = context.driver.find_elements(By.CSS_SELECTOR, "#list_rows tr")
+    visible_orders = [
+        tuple(cell.text for cell in row.find_elements(By.TAG_NAME, "td"))
+        for row in rows
+    ]
+    assert (context.first_order_id, "NEW") in visible_orders
+    assert (context.second_order_id, "NEW") in visible_orders
+
+
 @given("I have opened an existing order on the admin page")
 @given("I have looked up an order on the admin page")
 def step_look_up_existing_order(context):
