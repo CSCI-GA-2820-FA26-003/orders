@@ -96,6 +96,22 @@
         </div>
       </div>
     </div>
+    <section class="panel panel-default" aria-labelledby="list_heading">
+      <div class="panel-heading">
+        <h2 class="panel-title" id="list_heading">Orders list</h2>
+      </div>
+      <div class="panel-body">
+        <button type="button" class="btn btn-primary" id="list_button">List orders</button>
+        <div class="table-responsive" id="list_results" hidden>
+          <table class="table table-striped" aria-labelledby="list_heading">
+            <thead>
+              <tr><th scope="col">Order ID</th><th scope="col">Status</th></tr>
+            </thead>
+            <tbody id="list_rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
 
   <script src="/static/js/orders.js"></script>

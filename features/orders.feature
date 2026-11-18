@@ -31,6 +31,11 @@ Scenario: An error after a successful creation hides the earlier order ID
     Then I see a message explaining what is wrong
     And no order ID is shown
 
+Scenario: See multiple orders in the full list
+    Given I have created two orders on the admin page
+    When I list orders without a filter
+    Then I see both order IDs and their statuses in the results
+
 Scenario: Retrieve the order I entered
     Given I have created an order on the admin page
     When I look up its order ID

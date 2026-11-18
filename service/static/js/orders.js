@@ -91,6 +91,30 @@ document.getElementById("create_form").addEventListener("submit", async (event) 
   }
 });
 
+document.getElementById("list_button").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const results = document.getElementById("list_results");
+  const rows = document.getElementById("list_rows");
+  button.disabled = true;
+  results.hidden = true;
+  rows.replaceChildren();
+
+  try {
+    const orders = await sendRequest(ORDERS_URL);
+    for (const order of orders) {
+      const row = rows.insertRow();
+      row.insertCell().textContent = order.id;
+      row.insertCell().textContent = order.status;
+    }
+    results.hidden = orders.length === 0;
+    showMessage("success", orders.length === 0 ? "No orders found" : "Orders loaded");
+  } catch (error) {
+    showMessage("danger", error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 /** Formats a money amount with two decimals. */
 function formatMoney(amount) {
   return Number(amount).toFixed(2);
