@@ -89,10 +89,12 @@
                 <option value="CANCELLED">Cancelled</option>
               </select>
             </div>
-            <button type="submit" class="btn btn-primary" id="update_button">Save changes</button>
+            <button type="submit" class="btn btn-primary" id="update_button" disabled>Save changes</button>
           </form>
+          <button type="button" class="btn btn-warning" id="cancel_button" disabled>Cancel order</button>
+          <p class="help-block">Only NEW orders can be cancelled. Cancelling keeps the order and its items.</p>
           <hr>
-          <button type="button" class="btn btn-danger" id="delete_button">Delete order</button>
+          <button type="button" class="btn btn-danger" id="delete_button" disabled>Delete order</button>
         </div>
       </div>
     </div>
