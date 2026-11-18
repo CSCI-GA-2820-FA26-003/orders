@@ -30,7 +30,7 @@ from service.models import db, Order, Item, OrderStatus
 from tests.factories import OrderFactory, ItemFactory
 
 DATABASE_URI = os.getenv(
-    "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
+    "DATABASE_URI", "postgresql+psycopg://localhost:5432/testdb"
 )
 
 
@@ -118,6 +118,16 @@ class TestOrderService(TestCase):
         resp = self.client.post("/api/orders", json={"customer_id": True})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Order.all(), [])
+
+    def test_create_order_with_non_positive_customer_id(self):
+        """It should not Create an Order with a zero or negative customer ID"""
+        for customer_id in (-1, 0):
+            with self.subTest(customer_id=customer_id):
+                resp = self.client.post("/api/orders", json={"customer_id": customer_id})
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(resp.content_type, "application/json")
+                self.assertIn("customer_id", resp.get_json()["message"])
+                self.assertEqual(Order.all(), [])
 
     def test_create_order_with_items(self):
         """It should Create an Order containing Items"""
@@ -340,6 +350,19 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.content_type, "application/json")
         self.assertEqual(Order.find(order.id).customer_id, order.customer_id)
+
+    def test_update_order_with_non_positive_customer_id(self):
+        """It should not Update an Order with a zero or negative customer ID"""
+        order = OrderFactory(customer_id=123)
+        order.create()
+
+        for customer_id in (-1, 0):
+            with self.subTest(customer_id=customer_id):
+                resp = self.client.put(f"/api/orders/{order.id}", json={"customer_id": customer_id})
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(resp.content_type, "application/json")
+                self.assertIn("customer_id", resp.get_json()["message"])
+                self.assertEqual(Order.find(order.id).customer_id, 123)
 
     def test_update_order_without_json(self):
         """It should return a JSON 415 when the request is not JSON"""

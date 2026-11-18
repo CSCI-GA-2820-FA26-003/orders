@@ -88,6 +88,10 @@ class Order(db.Model, PersistentBase):
         """
         try:
             customer_id = _to_int(data["customer_id"], "customer_id")
+            if customer_id < 1:
+                raise DataValidationError(
+                    f"Invalid Order: customer_id must be a positive integer, not [{customer_id}]"
+                )
             current_status = self.status.name if self.status else OrderStatus.NEW.name
             status = OrderStatus[data.get("status", current_status)]
             # handle inner list of items

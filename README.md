@@ -281,22 +281,26 @@ The BDD tests open the admin page in a headless Chrome browser using Selenium. R
 in the dev container, because its image includes Chrome and the driver. Rebuild the dev
 container once so that it picks up the image and the new packages.
 
-Start the service in one terminal:
+Start the service against the separate test database described above in one
+terminal. Port 8081 avoids conflicting with the local K3s service on port 8080:
 
 ```bash
-make run
+DATABASE_URI=postgresql+psycopg://postgres:pgs3cr3t@postgres:5432/testdb PORT=8081 make run
 ```
 
 Run the tests in a second terminal:
 
 ```bash
-behave
+BASE_URL=http://localhost:8081 behave
 ```
 
 The tests read the service URL from `BASE_URL`, which defaults to
 `http://localhost:8080`, and wait up to `WAIT_SECONDS` for each page element. Put
-scenarios in `features/orders.feature` and step definitions in `features/steps/`.
-Scenarios use the web page only, with no direct calls to the service or the database.
+scenarios in `features/*.feature` and step definitions in `features/steps/`.
+User actions and result checks use the web page. Cancellation scenarios use the
+REST API only to prepare shipped and delivered fixtures. The recovery scenario
+simulates one failed cancellation response, then restores real requests for the
+retry. Run the tests against a test database.
 
 ## Data Model
 
@@ -376,8 +380,32 @@ UUID.
 
 ### Admin page
 
-`GET /` returns **200 OK** with the Orders admin page as HTML. The REST API routes
-below are unchanged.
+Look up an order by ID, then use **Cancel order** in its details to invoke the
+existing cancellation action. Only `NEW` orders can be cancelled. The page shows
+the service's result and the returned `CANCELLED` status; the same order ID,
+customer, items and subtotal remain available when looked up again. Cancellation
+and save/delete controls share a lock with lookup while any order request is pending.
+A failed lookup, save, delete or cancellation clears the selected record so stale
+details cannot be changed.
+
+`GET /` returns **200 OK** with the Orders admin page as HTML. The page calls the REST
+API routes below.
+
+### Swagger documentation
+
+Open **<http://localhost:8080/apidocs>** for the interactive Swagger UI, or fetch
+`GET /api/swagger.json` for the OpenAPI 2.0 specification. Use the service's actual
+host and port when running it elsewhere. The admin page remains at `GET /`.
+
+The API follows the [course Swagger lab](https://github.com/nyu-devops/lab-flask-restplus-swagger):
+[service/routes.py](service/routes.py) declares the RESTX API, its `orders`
+namespace, input/output schemas, and collection, individual-resource and action
+classes. The namespace includes nested order items under the shared `/api`
+prefix. Validation, serialized values, status codes and database behavior remain compatible.
+[service/common/api.py](service/common/api.py) keeps errors routed through the
+existing Flask handlers so their JSON envelope, request IDs and HTTP headers are
+preserved. Schema declarations document requests and responses; business-model
+validation remains authoritative.
 
 ### Create an order
 
@@ -600,15 +628,18 @@ Pipfile             - Pipenv list of Python libraries required by your code
 service/                     - service python package
 ├── __init__.py              - package initializer
 ├── config.py                - configuration parameters
-├── routes.py                - module with service routes
+├── routes.py                - RESTX resources, namespace and Swagger schemas
 ├── static                   - Orders admin page
-│   └── index.html           - admin page HTML
+│   ├── index.html           - admin page HTML
+│   ├── css                  - Bootstrap styles
+│   └── js/orders.js         - admin page behavior
 ├── models                   - business models package
 │   ├── __init__.py          - package initializer
 │   ├── persistent_base.py   - shared database persistence methods
 │   ├── order.py             - Order model
 │   └── item.py              - Item model
 └── common                   - common code package
+    ├── api.py               - RESTX integration preserving Flask error handling
     ├── cli_commands.py      - Flask command to recreate all tables
     ├── error_handlers.py    - HTTP error handling code
     ├── log_handlers.py      - logging setup code
@@ -621,13 +652,16 @@ tests/                       - test cases package
 ├── test_error_handlers.py   - test suite for the error handlers
 ├── test_order.py            - test suite for the Order model
 ├── test_item.py             - test suite for the Item model
+├── test_restx.py            - Swagger documentation and RESTX HTTP contracts
 └── test_routes.py           - test suite for service routes
 
 features/                    - BDD tests for the admin page
 ├── environment.py           - starts and closes the browser
 ├── orders.feature           - admin page scenarios
+├── cancel_order.feature     - cancellation and retained-record scenarios
 └── steps
-    └── web_steps.py         - Selenium step definitions
+    ├── web_steps.py         - create and lookup Selenium steps
+    └── cancel_order_steps.py - cancellation Selenium steps
 ```
 
 ## License
