@@ -306,10 +306,10 @@ scenarios simulate a single list response in the browser, then restore real
 requests. Run the tests against a test database.
 
 The **Find orders** panel loads all orders when the admin page opens. Select a
-status and click **Filter** to send `GET /orders?status=<status>`. **Pending (NEW)**
+status and click **Filter** to send `GET /api/orders?status=<status>`. **Pending (NEW)**
 uses the existing `NEW` status; it does not introduce a new API status. Choose
 **All statuses** and click **Filter**, or click **Clear filter**, to reload
-`GET /orders` without a status parameter. Empty results and request failures are
+`GET /api/orders` without a status parameter. Empty results and request failures are
 shown in the panel, and a failed search clears stale results and allows a retry.
 
 The CI build runs these Selenium scenarios against its PostgreSQL test database

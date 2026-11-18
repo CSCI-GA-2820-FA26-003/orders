@@ -15,14 +15,14 @@ def wait_for_search(context):
 
 def remove_fixture(context, order_id):
     """Remove only the order created by this scenario."""
-    response = requests.delete(f"{context.base_url}/orders/{order_id}", timeout=context.wait_seconds)
+    response = requests.delete(f"{context.base_url}/api/orders/{order_id}", timeout=context.wait_seconds)
     assert response.status_code == 204, response.text
 
 
 def create_fixture(context, order_status):
     """Create a known status without depending on existing orders."""
     response = requests.post(
-        f"{context.base_url}/orders",
+        f"{context.base_url}/api/orders",
         json={"customer_id": 8501, "status": order_status},
         timeout=context.wait_seconds,
     )
