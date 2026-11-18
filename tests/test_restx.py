@@ -50,12 +50,12 @@ class TestRestx(TestCase):
                 self.assertEqual(client.get("/apidocs").status_code, 200 if doc else 404)
 
     def test_documented_operations_keep_existing_paths(self):
-        """It should document every order and item operation without an API prefix."""
-        response = self.client.get("/swagger.json")
+        """It should document every order and item operation under the shared API prefix."""
+        response = self.client.get("/api/swagger.json")
         self.assertEqual(response.status_code, 200)
         spec = response.get_json()
         self.assertEqual(spec["swagger"], "2.0")
-        self.assertEqual(spec["basePath"], "/")
+        self.assertEqual(spec["basePath"], "/api")
         expected = {
             "/orders": {"get", "post"},
             "/orders/{order_id}": {"get", "put", "delete"},
@@ -73,7 +73,7 @@ class TestRestx(TestCase):
 
     def test_documented_inputs_and_outputs(self):
         """It should document nested items, read-only values, filters and creation headers."""
-        spec = self.client.get("/swagger.json").get_json()
+        spec = self.client.get("/api/swagger.json").get_json()
         definitions = spec["definitions"]
         self.assertEqual(definitions["OrderInput"]["required"], ["customer_id"])
         self.assertEqual(definitions["ItemInput"]["required"], ["product_id", "quantity", "unit_price"])
@@ -91,7 +91,7 @@ class TestRestx(TestCase):
 
     def test_unsupported_resource_method_preserves_error_contract(self):
         """It should preserve JSON errors, request IDs and Allow on RESTX resources."""
-        response = self.client.patch("/orders", headers={"X-Request-ID": "restx-method-test"})
+        response = self.client.patch("/api/orders", headers={"X-Request-ID": "restx-method-test"})
         self.assertEqual(response.status_code, 405)
         self.assertEqual(response.get_json()["error"], "Method not Allowed")
         self.assertEqual(set(response.get_json()), {"status", "error", "message"})
@@ -104,9 +104,9 @@ class TestRestx(TestCase):
         order = Mock(id=123)
         order.serialize.return_value = payload
         cases = (
-            ("GET", "/orders", [payload], 200),
-            ("GET", "/orders/123", payload, 200),
-            ("POST", "/orders", payload, 201),
+            ("GET", "/api/orders", [payload], 200),
+            ("GET", "/api/orders/123", payload, 200),
+            ("POST", "/api/orders", payload, 201),
         )
         with patch("service.routes.Order") as order_model:
             order_model.return_value = order
@@ -128,7 +128,7 @@ class TestRestx(TestCase):
                     self.assertEqual(response.content_type, expected.content_type)
                     self.assertEqual(response.headers["X-Request-ID"], "restx-json-test")
                     if code == 201:
-                        self.assertEqual(response.headers["Location"], "http://localhost/orders/123")
+                        self.assertEqual(response.headers["Location"], "http://localhost/api/orders/123")
 
     def test_json_responses_support_flask_types(self):
         """It should use Flask's Decimal, date, datetime and UUID encoders."""
@@ -143,7 +143,7 @@ class TestRestx(TestCase):
         with app.app_context():
             expected = jsonify(payload)
         with patch("service.routes.Order.find", return_value=order):
-            response = self.client.get("/orders/123")
+            response = self.client.get("/api/orders/123")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, expected.data)
         self.assertEqual(response.content_type, expected.content_type)
@@ -151,11 +151,11 @@ class TestRestx(TestCase):
     def test_delete_responses_match_flask(self):
         """It should retain empty Flask 204 responses for existing and absent records."""
         cases = (
-            ("/orders/123", Mock(), None),
-            ("/orders/123", None, None),
-            ("/orders/123/items/456", None, Mock(order_id=123)),
-            ("/orders/123/items/456", None, None),
-            ("/orders/123/items/456", None, Mock(order_id=999)),
+            ("/api/orders/123", Mock(), None),
+            ("/api/orders/123", None, None),
+            ("/api/orders/123/items/456", None, Mock(order_id=123)),
+            ("/api/orders/123/items/456", None, None),
+            ("/api/orders/123/items/456", None, Mock(order_id=999)),
         )
         with app.app_context():
             expected = app.make_response(("", 204))

@@ -17,7 +17,7 @@
 """Orders RESTX resources and Swagger models, following the course lab layout.
 
 The admin page and liveness endpoint retain their Flask routes. The Orders
-namespace owns order, item and cancellation resources at their existing URLs.
+namespace owns order, item and cancellation resources under the shared /api prefix.
 """
 
 from flask import jsonify, request, url_for, abort
@@ -42,6 +42,7 @@ def health():
 
 api = OrdersApi(
     app,
+    prefix="/api",
     version="1.0.0",
     title="Orders REST API",
     description="Manage orders and their items, including filtering and cancellation.",

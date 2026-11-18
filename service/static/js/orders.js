@@ -1,6 +1,6 @@
 "use strict";
 
-const ORDERS_URL = "/orders";
+const ORDERS_URL = "/api/orders";
 
 /** Shows the outcome of an action. Type is "success" or "danger". */
 function showMessage(type, text) {
