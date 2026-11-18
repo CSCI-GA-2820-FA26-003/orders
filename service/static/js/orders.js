@@ -91,25 +91,59 @@ document.getElementById("create_form").addEventListener("submit", async (event) 
   }
 });
 
+document.getElementById("list_button").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const results = document.getElementById("list_results");
+  const rows = document.getElementById("list_rows");
+  button.disabled = true;
+  results.hidden = true;
+  rows.replaceChildren();
+
+  try {
+    const orders = await sendRequest(ORDERS_URL);
+    for (const order of orders) {
+      const row = rows.insertRow();
+      row.insertCell().textContent = order.id;
+      row.insertCell().textContent = order.status;
+    }
+    results.hidden = orders.length === 0;
+    showMessage("success", orders.length === 0 ? "No orders found" : "Orders loaded");
+  } catch (error) {
+    showMessage("danger", error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 /** Formats a money amount with two decimals. */
 function formatMoney(amount) {
   return Number(amount).toFixed(2);
 }
 
-// Cancellation always targets the displayed record, even if the lookup input changes.
+// Order actions target the displayed record and share a single request lock.
 let selectedOrder = null;
-let cancelPending = false;
+let orderPending = false;
 
-/** Clears the selection so hidden or outdated details cannot be cancelled. */
+/** Keeps lookup, save, delete and cancel from racing with another order request. */
+function updateOrderControls() {
+  document.getElementById("lookup_button").disabled = orderPending;
+  document.getElementById("update_button").disabled = orderPending || !selectedOrder;
+  document.getElementById("delete_button").disabled = orderPending || !selectedOrder;
+  document.getElementById("cancel_button").disabled = orderPending || !selectedOrder || selectedOrder.status !== "NEW";
+}
+
+/** Clears the selection so hidden or outdated details cannot be changed. */
 function clearOrderDetails() {
   selectedOrder = null;
   document.getElementById("order_details").hidden = true;
-  document.getElementById("cancel_button").disabled = true;
+  updateOrderControls();
 }
 
 /** Shows an order and its items in the lookup panel. */
 function showOrderDetails(order) {
   selectedOrder = order;
+  document.getElementById("update_customer_id").value = order.customer_id;
+  document.getElementById("update_status").value = order.status;
   document.getElementById("order_detail_id").textContent = order.id;
   document.getElementById("order_detail_customer_id").textContent = order.customer_id;
   document.getElementById("order_detail_status").textContent = order.status;
@@ -125,15 +159,12 @@ function showOrderDetails(order) {
   }
   document.getElementById("order_detail_no_items").hidden = order.items.length > 0;
   document.getElementById("order_details").hidden = false;
-  document.getElementById("cancel_button").disabled = order.status !== "NEW" || cancelPending;
+  updateOrderControls();
 }
-
-// True while a lookup request is waiting for the service
-let lookupPending = false;
 
 document.getElementById("lookup_form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (lookupPending || cancelPending) {
+  if (orderPending) {
     return;
   }
   clearOrderDetails();
@@ -144,9 +175,8 @@ document.getElementById("lookup_form").addEventListener("submit", async (event) 
     return;
   }
 
-  lookupPending = true;
-  const lookupButton = document.getElementById("lookup_button");
-  lookupButton.disabled = true;
+  orderPending = true;
+  updateOrderControls();
   try {
     const order = await sendRequest(`${ORDERS_URL}/${orderId}`);
     showOrderDetails(order);
@@ -154,22 +184,19 @@ document.getElementById("lookup_form").addEventListener("submit", async (event) 
   } catch (error) {
     showMessage("danger", error.message);
   } finally {
-    lookupPending = false;
-    lookupButton.disabled = false;
+    orderPending = false;
+    updateOrderControls();
   }
 });
 
 document.getElementById("cancel_button").addEventListener("click", async () => {
-  if (!selectedOrder || selectedOrder.status !== "NEW" || lookupPending || cancelPending) {
+  if (!selectedOrder || selectedOrder.status !== "NEW" || orderPending) {
     return;
   }
 
   const orderId = selectedOrder.id;
-  cancelPending = true;
-  const cancelButton = document.getElementById("cancel_button");
-  const lookupButton = document.getElementById("lookup_button");
-  cancelButton.disabled = true;
-  lookupButton.disabled = true;
+  orderPending = true;
+  updateOrderControls();
   try {
     const order = await sendRequest(`${ORDERS_URL}/${orderId}/cancel`, "PUT");
     showOrderDetails(order);
@@ -178,8 +205,60 @@ document.getElementById("cancel_button").addEventListener("click", async () => {
     clearOrderDetails();
     showMessage("danger", error.message);
   } finally {
-    cancelPending = false;
-    lookupButton.disabled = false;
-    cancelButton.disabled = !selectedOrder || selectedOrder.status !== "NEW";
+    orderPending = false;
+    updateOrderControls();
+  }
+});
+
+document.getElementById("update_form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!selectedOrder || orderPending) {
+    return;
+  }
+
+  const customerId = fieldValue("update_customer_id");
+  const changes = { status: fieldValue("update_status") };
+  if (customerId !== "") {
+    changes.customer_id = Number(customerId);
+  } else {
+    showMessage("danger", "Enter a customer ID");
+    return;
+  }
+
+  const orderId = selectedOrder.id;
+  orderPending = true;
+  updateOrderControls();
+  try {
+    // Omitting items preserves the existing items on the server.
+    const order = await sendRequest(`${ORDERS_URL}/${orderId}`, "PUT", changes);
+    showOrderDetails(order);
+    showMessage("success", `Order ${order.id} updated`);
+  } catch (error) {
+    clearOrderDetails();
+    showMessage("danger", error.message);
+  } finally {
+    orderPending = false;
+    updateOrderControls();
+  }
+});
+
+document.getElementById("delete_button").addEventListener("click", async () => {
+  if (!selectedOrder || orderPending) {
+    return;
+  }
+
+  const orderId = selectedOrder.id;
+  orderPending = true;
+  updateOrderControls();
+  try {
+    await sendRequest(`${ORDERS_URL}/${orderId}`, "DELETE");
+    clearOrderDetails();
+    showMessage("success", `Order ${orderId} deleted`);
+  } catch (error) {
+    clearOrderDetails();
+    showMessage("danger", error.message);
+  } finally {
+    orderPending = false;
+    updateOrderControls();
   }
 });

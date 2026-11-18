@@ -30,6 +30,40 @@ Scenario: A failed lookup clears the cancellation selection
     And the previous order details are no longer shown
     And cancellation is disabled and sends no request
 
+Scenario Outline: Order changes block competing actions
+    Given I have opened an order that is eligible for cancellation
+    When I start "<action>" and try the other order actions
+    Then only the "<action>" request is sent while all order controls are locked
+    And the "<action>" result remains after looking up the same order
+
+    Examples:
+        | action |
+        | save   |
+        | cancel |
+        | delete |
+
+Scenario: The full list shows the cancelled status
+    Given I have opened an order that is eligible for cancellation
+    When I cancel it on the admin page
+    And I list orders without a filter
+    Then the full list contains the cancelled order
+
+Scenario: Saving fulfillment disables cancellation
+    Given I have opened an order that is eligible for cancellation
+    When I save the displayed order with status "SHIPPED"
+    Then cancellation is disabled and sends no request
+    When I look it up again by the same ID
+    Then the same order is still shipped
+
+Scenario: A failed save clears the order selected for cancellation
+    Given I have opened an order that is eligible for cancellation
+    And the next save request fails
+    When I save the displayed order
+    Then I see the save error without stale order details
+    And cancellation is disabled and sends no request
+    When I look it up again by the same ID
+    Then the order is still eligible for cancellation
+
 Scenario Outline: Fulfilled orders cannot be cancelled on the page
     Given I have opened a "<status>" order for cancellation
     Then cancellation is disabled and sends no request

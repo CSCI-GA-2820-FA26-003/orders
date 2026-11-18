@@ -113,6 +113,26 @@ def step_no_order_id(context):
     assert not context.driver.find_element(By.ID, "created_order").is_displayed()
 
 
+@when("I list orders without a filter")
+def step_list_orders(context):
+    """Request the full list through the page"""
+    context.driver.find_element(By.ID, "list_button").click()
+
+
+@then("I see both order IDs and their statuses in the results")
+def step_check_list_orders(context):
+    """Find both newly created orders in their own rows"""
+    wait_for_message(context, "alert-success", "Orders loaded")
+    rows = context.driver.find_elements(By.CSS_SELECTOR, "#list_rows tr")
+    visible_orders = [
+        tuple(cell.text for cell in row.find_elements(By.TAG_NAME, "td"))
+        for row in rows
+    ]
+    assert (context.first_order_id, "NEW") in visible_orders
+    assert (context.second_order_id, "NEW") in visible_orders
+
+
+@given("I have opened an existing order on the admin page")
 @given("I have looked up an order on the admin page")
 def step_look_up_existing_order(context):
     """Create an order, then show it in the lookup panel"""
@@ -121,6 +141,7 @@ def step_look_up_existing_order(context):
     wait_for_message(context, "alert-success", f"Found order {context.order_id}")
 
 
+@when("I look up the same order again")
 @when("I look up its order ID")
 def step_look_up_order(context):
     """Look up the order that the scenario created"""
@@ -206,3 +227,73 @@ def wait_for_message(context, css_class, text):
     wait = WebDriverWait(context.driver, context.wait_seconds)
     wait.until(expected_conditions.text_to_be_present_in_element((By.ID, "flash_message"), text))
     assert css_class in context.driver.find_element(By.ID, "flash_message").get_attribute("class")
+
+
+@when("I change an editable detail and save the order")
+def step_update_order(context):
+    """Change only the customer ID and wait for the update to finish"""
+    customer = context.driver.find_element(By.ID, "update_customer_id")
+    customer.clear()
+    customer.send_keys("1002")
+    context.driver.find_element(By.ID, "update_button").click()
+    wait_for_message(context, "alert-success", f"Order {context.order_id} updated")
+
+
+@then("I see the corrected detail under the original order ID")
+def step_see_updated_order(context):
+    """Check the correction and the unchanged order details after a fresh lookup"""
+    wait_for_message(context, "alert-success", f"Found order {context.order_id}")
+    assert detail_text(context, "order_detail_id") == context.order_id
+    assert detail_text(context, "order_detail_customer_id") == "1002"
+    assert detail_text(context, "order_detail_status") == "NEW"
+    assert detail_text(context, "order_detail_subtotal") == "25.00"
+    cells = context.driver.find_elements(By.CSS_SELECTOR, "#order_detail_items td")
+    assert [cell.text for cell in cells] == [
+        NEW_ORDER["product_id"], NEW_ORDER["quantity"], NEW_ORDER["unit_price"], "25.00"
+    ]
+
+
+@then("the update form is hidden")
+def step_update_form_hidden(context):
+    """Check that the previous order cannot be edited after a failed lookup"""
+    assert not context.driver.find_element(By.ID, "update_form").is_displayed()
+
+
+@given("I have created two orders on the admin page")
+def step_create_two_orders(context):
+    """Create two separate orders through the page and remember their IDs"""
+    step_create_order(context)
+    context.first_order_id = context.order_id
+    step_create_order(context)
+    context.second_order_id = context.order_id
+    assert context.first_order_id != context.second_order_id
+
+
+@when("I delete the first order")
+def step_delete_first_order(context):
+    """Select the first order and delete it through the page"""
+    look_up(context, context.first_order_id)
+    wait_for_message(context, "alert-success", f"Found order {context.first_order_id}")
+    # Typing another ID without looking it up must not change the selected order.
+    lookup_field = context.driver.find_element(By.ID, "lookup_order_id")
+    lookup_field.clear()
+    lookup_field.send_keys(context.second_order_id)
+    delete_button = context.driver.find_element(By.ID, "delete_button")
+    delete_button.click()
+    wait_for_message(context, "alert-success", f"Order {context.first_order_id} deleted")
+    step_details_hidden(context)
+
+
+@then("I cannot find the first order by ID")
+def step_first_order_not_found(context):
+    """Look up the deleted order and check the service's response"""
+    look_up(context, context.first_order_id)
+    wait_for_message(context, "alert-danger", f"Order with id [{context.first_order_id}] was not found")
+
+
+@then("I can still find the second order by ID")
+def step_second_order_found(context):
+    """Look up the other order and confirm its ID"""
+    look_up(context, context.second_order_id)
+    wait_for_message(context, "alert-success", f"Found order {context.second_order_id}")
+    assert detail_text(context, "order_detail_id") == context.second_order_id

@@ -74,11 +74,46 @@
             <tbody id="order_detail_items"></tbody>
           </table>
           <p id="order_detail_no_items" hidden>This order has no items.</p>
+          <form id="update_form" novalidate>
+            <h3>Update this order</h3>
+            <div class="form-group">
+              <label for="update_customer_id">Customer ID</label>
+              <input type="number" class="form-control" id="update_customer_id" required>
+            </div>
+            <div class="form-group">
+              <label for="update_status">Status</label>
+              <select class="form-control" id="update_status">
+                <option value="NEW">New</option>
+                <option value="SHIPPED">Shipped</option>
+                <option value="DELIVERED">Delivered</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary" id="update_button" disabled>Save changes</button>
+          </form>
           <button type="button" class="btn btn-warning" id="cancel_button" disabled>Cancel order</button>
           <p class="help-block">Only NEW orders can be cancelled. Cancelling keeps the order and its items.</p>
+          <hr>
+          <button type="button" class="btn btn-danger" id="delete_button" disabled>Delete order</button>
         </div>
       </div>
     </div>
+    <section class="panel panel-default" aria-labelledby="list_heading">
+      <div class="panel-heading">
+        <h2 class="panel-title" id="list_heading">Orders list</h2>
+      </div>
+      <div class="panel-body">
+        <button type="button" class="btn btn-primary" id="list_button">List orders</button>
+        <div class="table-responsive" id="list_results" hidden>
+          <table class="table table-striped" aria-labelledby="list_heading">
+            <thead>
+              <tr><th scope="col">Order ID</th><th scope="col">Status</th></tr>
+            </thead>
+            <tbody id="list_rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
 
   <script src="/static/js/orders.js"></script>

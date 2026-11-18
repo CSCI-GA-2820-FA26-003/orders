@@ -376,15 +376,32 @@ UUID.
 
 ### Admin page
 
-`GET /` returns **200 OK** with the Orders admin page as HTML. The page calls the REST
-API routes below.
-
 Look up an order by ID, then use **Cancel order** in its details to invoke the
 existing cancellation action. Only `NEW` orders can be cancelled. The page shows
 the service's result and the returned `CANCELLED` status; the same order ID,
 customer, items and subtotal remain available when looked up again. Cancellation
-and lookup controls are locked while cancellation is pending. A failed lookup or
-cancellation clears the selected record so stale details cannot be cancelled.
+and save/delete controls share a lock with lookup while any order request is pending.
+A failed lookup, save, delete or cancellation clears the selected record so stale
+details cannot be changed.
+
+`GET /` returns **200 OK** with the Orders admin page as HTML. The page calls the REST
+API routes below.
+
+### Swagger documentation
+
+Open **<http://localhost:8080/apidocs>** for the interactive Swagger UI, or fetch
+`GET /swagger.json` for the OpenAPI 2.0 specification. Use the service's actual
+host and port when running it elsewhere. The admin page remains at `GET /`.
+
+The API follows the [course Swagger lab](https://github.com/nyu-devops/lab-flask-restplus-swagger):
+[service/routes.py](service/routes.py) declares the RESTX API, its `orders`
+namespace, input/output schemas, and collection, individual-resource and action
+classes. The namespace includes nested order items. Existing URLs, validation,
+serialized values, status codes and database behavior remain compatible.
+[service/common/api.py](service/common/api.py) keeps errors routed through the
+existing Flask handlers so their JSON envelope, request IDs and HTTP headers are
+preserved. Schema declarations document requests and responses; business-model
+validation remains authoritative.
 
 ### Create an order
 
@@ -607,7 +624,7 @@ Pipfile             - Pipenv list of Python libraries required by your code
 service/                     - service python package
 ├── __init__.py              - package initializer
 ├── config.py                - configuration parameters
-├── routes.py                - module with service routes
+├── routes.py                - RESTX resources, namespace and Swagger schemas
 ├── static                   - Orders admin page
 │   ├── index.html           - admin page HTML
 │   ├── css                  - Bootstrap styles
@@ -618,6 +635,7 @@ service/                     - service python package
 │   ├── order.py             - Order model
 │   └── item.py              - Item model
 └── common                   - common code package
+    ├── api.py               - RESTX integration preserving Flask error handling
     ├── cli_commands.py      - Flask command to recreate all tables
     ├── error_handlers.py    - HTTP error handling code
     ├── log_handlers.py      - logging setup code
@@ -630,6 +648,7 @@ tests/                       - test cases package
 ├── test_error_handlers.py   - test suite for the error handlers
 ├── test_order.py            - test suite for the Order model
 ├── test_item.py             - test suite for the Item model
+├── test_restx.py            - Swagger documentation and RESTX HTTP contracts
 └── test_routes.py           - test suite for service routes
 
 features/                    - BDD tests for the admin page
